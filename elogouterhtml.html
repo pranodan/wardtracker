@@ -1,0 +1,224 @@
+<form id="form-activity" action="/Activity/save" method="post" novalidate="novalidate">
+  <div class="row">
+    <div class="col-md">
+      <div class="form-group">
+        <input type="hidden" value="0" class="input-validation-error" data-val="true"
+          data-val-required="The Id field is required." id="Id" name="Id"> <label class="control-label required-field"
+          for="ProgramYearId">Program Year</label>
+        <select class="form-control" data-value="0" data-val="true"
+          data-val-required="The Program Year field is required." id="ProgramYearId" name="ProgramYearId"
+          style="display: none;">
+          <option value="">--Select-- </option>
+          <option value="1">First</option>
+          <option value="2">Second</option>
+          <option value="3">Third</option>
+        </select>
+        <div class="chosen-container chosen-container-single" title="" id="ProgramYearId_chosen" style="width: 223px;">
+          <a class="chosen-single chosen-default">
+            <span>Select an Option</span>
+            <div><b></b></div>
+          </a>
+          <div class="chosen-drop">
+            <div class="chosen-search">
+              <input class="chosen-search-input" type="text" autocomplete="off">
+            </div>
+            <ul class="chosen-results"></ul>
+          </div>
+        </div>
+        <span class="text-danger field-validation-valid" data-valmsg-for="ProgramYearId"
+          data-valmsg-replace="true"></span>
+      </div>
+    </div>
+    <div class="col-md">
+      <div class="form-group">
+        <label class="control-label required-field" for="ProgramBlockId">Program Block</label>
+        <select class="form-control" data-value="0" data-val="true"
+          data-val-required="The Program Block field is required." id="ProgramBlockId" name="ProgramBlockId"
+          style="display: none;">
+          <option value="">--Select-- </option>
+          <option value="1">I</option>
+          <option value="2">II</option>
+          <option value="3">III</option>
+          <option value="4">IV</option>
+          <option value="5">V</option>
+          <option value="6">VI</option>
+        </select>
+        <div class="chosen-container chosen-container-single" title="" id="ProgramBlockId_chosen" style="width: 222px;">
+          <a class="chosen-single chosen-default">
+            <span>Select an Option</span>
+            <div><b></b></div>
+          </a>
+          <div class="chosen-drop">
+            <div class="chosen-search">
+              <input class="chosen-search-input" type="text" autocomplete="off">
+            </div>
+            <ul class="chosen-results"></ul>
+          </div>
+        </div>
+        <span class="text-danger field-validation-valid" data-valmsg-for="ProgramBlockId"
+          data-valmsg-replace="true"></span>
+      </div>
+    </div>
+    <div class="col-md">
+      <div class="form-group">
+        <label class="control-label required-field" for="ProgramDomainId">Domain</label>
+        <select class="form-control" data-value="0" data-val="true" data-val-required="The Domain field is required."
+          id="ProgramDomainId" name="ProgramDomainId" style="display: none;">
+          <option value="">--Select-- </option>
+          <option value="1">Knowledge</option>
+          <option value="2">Skill</option>
+          <option value="4">Attitude</option>
+        </select>
+        <div class="chosen-container chosen-container-single" title="" id="ProgramDomainId_chosen"
+          style="width: 222px;">
+          <a class="chosen-single chosen-default">
+            <span>Select an Option</span>
+            <div><b></b></div>
+          </a>
+          <div class="chosen-drop">
+            <div class="chosen-search">
+              <input class="chosen-search-input" type="text" autocomplete="off">
+            </div>
+            <ul class="chosen-results"></ul>
+          </div>
+        </div>
+        <span class="text-danger field-validation-valid" data-valmsg-for="ProgramDomainId"
+          data-valmsg-replace="true"></span>
+      </div>
+    </div>
+    <div class="col-md">
+      <div class="form-group">
+        <label class="control-label" for="LevelId">Level</label>
+        <select class="form-control" data-value="" id="LevelId" name="LevelId" style="display: none;">
+          <option value="">--Select-- </option>
+          <option value="1">I - Observation</option>
+          <option value="2">II - Assistance</option>
+          <option value="3">III - Perform under supervision</option>
+          <option value="4">IV - Perform/Work independently</option>
+        </select>
+        <div class="chosen-container chosen-container-single" title="" id="LevelId_chosen" style="width: 222px;">
+          <a class="chosen-single chosen-default">
+            <span>Select an Option</span>
+            <div><b></b></div>
+          </a>
+          <div class="chosen-drop">
+            <div class="chosen-search">
+              <input class="chosen-search-input" type="text" autocomplete="off">
+            </div>
+            <ul class="chosen-results"></ul>
+          </div>
+        </div>
+        <span class="text-danger field-validation-valid" data-valmsg-for="LevelId" data-valmsg-replace="true"></span>
+      </div>
+    </div>
+  </div>
+  <div class="row">
+    <div class="col-md">
+      <div class="form-group"><label class="control-label" for="ProcedureId">Procedure</label> <input
+          class="form-control" rows="4" id="ProcedureName" name="ProcedureName"> <span
+          class="text-danger field-validation-valid" data-valmsg-for="ProcedureName" data-valmsg-replace="true"></span>
+      </div>
+    </div>
+  </div>
+  <div class="row">
+    <div class="col-md">
+      <div class="form-group"><label class="control-label" for="ProcedureDescription">Procedure Description</label>
+        <textarea class="form-control" rows="4" id="ProcedureDescription" name="ProcedureDescription"></textarea> <span
+          class="text-danger field-validation-valid" data-valmsg-for="ProcedureDescription"
+          data-valmsg-replace="true"></span></div>
+    </div>
+  </div>
+  <hr>
+  <div class="row">
+    <div class="col-md">
+      <div class="form-group"><label class="control-label required-field" for="Date">Date</label><span
+          class="bs-date text-primary"></span> <input class="form-control eng-date" placeholder="Date in AD" type="text"
+          data-val="true" data-val-required="The Date field is required." id="Date" name="Date" autocomplete="off">
+        <span class="text-danger field-validation-valid" data-valmsg-for="Date" data-valmsg-replace="true"></span></div>
+    </div>
+    <div class="col-md">
+      <div class="form-group"><label class="control-label required-field" for="InPatientId">Patient/Inpatient Id</label>
+        <input class="form-control" data-val="true" data-val-required="The Patient/Inpatient Id field is required."
+          id="InPatientId" name="InPatientId"> <span class="text-danger field-validation-valid"
+          data-valmsg-for="InPatientId" data-valmsg-replace="true"></span></div>
+    </div>
+    <div class="col-md">
+      <div class="form-group"><label class="control-label required-field" for="PatientName">Patient Name</label> <input
+          class="form-control" data-val="true" data-val-required="The Patient Name field is required." id="PatientName"
+          name="PatientName"> <span class="text-danger field-validation-valid" data-valmsg-for="PatientName"
+          data-valmsg-replace="true"></span></div>
+    </div>
+  </div>
+  <div class="row">
+    <div class="col-md">
+      <div class="form-group"><label class="control-label" for="Age">Age(Years)</label> <input class="form-control"
+          type="number" id="Age" name="Age"> <span class="text-danger field-validation-valid" data-valmsg-for="Age"
+          data-valmsg-replace="true"></span></div>
+    </div>
+    <div class="col-md">
+      <div class="form-group"><label class="control-label" for="Address">Address</label> <input class="form-control"
+          id="Address" name="Address"> <span class="text-danger field-validation-valid" data-valmsg-for="Address"
+          data-valmsg-replace="true"></span></div>
+    </div>
+  </div>
+  <div class="row">
+    <div class="col-md">
+      <div class="form-group"><label class="control-label" for="History">History</label> <textarea class="form-control"
+          rows="3" id="History" name="History"></textarea> <span class="text-danger field-validation-valid"
+          data-valmsg-for="History" data-valmsg-replace="true"></span></div>
+    </div>
+    <div class="col-md">
+      <div class="form-group"><label class="control-label" for="Diagnosis">Clinical Examination/Physical
+          Findings</label> <textarea class="form-control" rows="3" id="Diagnosis" name="Diagnosis"></textarea> <span
+          class="text-danger field-validation-valid" data-valmsg-for="Diagnosis" data-valmsg-replace="true"></span>
+      </div>
+    </div>
+  </div>
+  <div class="row">
+    <div class="col-md">
+      <div class="form-group"><label class="control-label" for="Investigation">Investigation</label> <textarea
+          class="form-control" rows="3" id="Investigation" name="Investigation"></textarea> <span
+          class="text-danger field-validation-valid" data-valmsg-for="Investigation" data-valmsg-replace="true"></span>
+      </div>
+    </div>
+    <div class="col-md">
+      <div class="form-group"><label class="control-label" for="ProvisionalDiagnosys">Provisional Diagnosis</label>
+        <textarea class="form-control" rows="3" id="ProvisionalDiagnosys" name="ProvisionalDiagnosys"></textarea> <span
+          class="text-danger field-validation-valid" data-valmsg-for="ProvisionalDiagnosys"
+          data-valmsg-replace="true"></span></div>
+    </div>
+  </div>
+  <div class="row">
+    <div class="col-md">
+      <div class="form-group"><label class="control-label" for="FinalDiagnosys">Final Diagnosis</label> <textarea
+          class="form-control" rows="3" id="FinalDiagnosys" name="FinalDiagnosys"></textarea> <span
+          class="text-danger field-validation-valid" data-valmsg-for="FinalDiagnosys" data-valmsg-replace="true"></span>
+      </div>
+    </div>
+    <div class="col-md">
+      <div class="form-group"><label class="control-label" for="Management">Management</label> <textarea
+          class="form-control" rows="3" id="Management" name="Management"></textarea> <span
+          class="text-danger field-validation-valid" data-valmsg-for="Management" data-valmsg-replace="true"></span>
+      </div>
+    </div>
+  </div>
+  <div class="row">
+    <div class="col-md">
+      <div class="form-group"><label class="control-label" for="FollowUp">Followup</label> <input class="form-control"
+          id="FollowUp" name="FollowUp"> <span class="text-danger field-validation-valid" data-valmsg-for="FollowUp"
+          data-valmsg-replace="true"></span></div>
+    </div>
+    <div class="col-md">
+      <div class="form-group">
+        <label class="control-label" for="SubmittedList">Submitted To</label>
+        <select name="SubmittedList[]" class="form-control" multiple="" data-value="" id="SubmittedList"
+          style="display: none;">
+          <option value="26">Pro. Dr Ashok kumar Banskota</option>
+          <option value="27">Dr Bibek Baskota</option>
+          <option value="28">Dr Rajesh Kumar Chaudhary</option>
+          <option value="29">Dr Bibek Basukala</option>
+          <option value="30">Dr Nagmani Singh</option>
+          <option value="85">Dr Ram Krishna Barakoti</option>
+          <option value="86">Dr Ishwor Pradhan</option>
+        </select>
+        <div class="chosen-container chosen-container-multi" title=""

@@ -1,0 +1,337 @@
+"use client";
+
+import { usePatients } from "@/hooks/usePatients";
+import { UNITS, Patient } from "@/types";
+import { useParams, useRouter } from "next/navigation";
+import { useState, useMemo } from "react";
+import PatientList from "@/components/ward/PatientList";
+import PatientDetailModal from "@/components/ward/PatientDetailModal";
+import PatientSummaryModal from "@/components/ward/PatientSummaryModal";
+import DischargeForm from "@/components/ward/DischargeForm";
+import { sortPatientsByBed } from "@/lib/bed-sorting";
+import { Users, Bed, List, Map, FileOutput } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { db } from "@/lib/firebase";
+import { collection, addDoc, query, where, getDocs, deleteDoc, setDoc, doc } from "firebase/firestore";
+import { useToast } from "@/components/ui/Toast";
+import ViewSwitcher, { ViewMode } from "@/components/ward/ViewSwitcher";
+
+export default function UnitPage() {
+    const params = useParams();
+    const router = useRouter();
+    const unitId = Number(params.id);
+    const unit = UNITS.find((u) => u.id === unitId);
+    const { patients, loading } = usePatients();
+    const [activeTab, setActiveTab] = useState<"unit" | "main" | "consultant">("unit");
+    const [viewMode, setViewMode] = useState<ViewMode>("cards");
+    const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
+    const [dischargingPatient, setDischargingPatient] = useState<Patient | null>(null);
+    const [collapsedConsultants, setCollapsedConsultants] = useState<Record<string, boolean>>({});
+    const { showToast } = useToast();
+
+    // Calculate total patients for this unit (regardless of active tab)
+    const unitTotalPatients = useMemo(() => {
+        if (!unit) return 0;
+        return patients.filter(p => {
+            const patientConsultant = p.consultant?.toLowerCase() || "";
+            return unit.consultants.some(c => patientConsultant.includes(c.toLowerCase()));
+        }).length;
+    }, [patients, unit]);
+
+    // Filter and Sort Patients
+    const displayedPatients = useMemo(() => {
+        if (!unit) return [];
+
+        // Filter out discharged patients
+        let filtered = patients.filter(p => p.status !== "discharged");
+
+        if (activeTab === "unit" || activeTab === "consultant") {
+            filtered = filtered.filter((p) => {
+                const patientConsultant = p.consultant?.toLowerCase() || "";
+                return unit.consultants.some(c => patientConsultant.includes(c.toLowerCase()));
+            });
+
+            if (activeTab === "unit") {
+                // Only sort by bed in Unit view
+                return sortPatientsByBed(filtered);
+            }
+            return filtered;
+        }
+
+        return filtered;
+    }, [patients, activeTab, unit]);
+
+    const handlePatientClick = (patient: Patient) => {
+        setSelectedPatient(patient);
+    };
+
+    const handleSavePatient = async (updated: Patient) => {
+        try {
+            // Save to 'patient_data' collection using hospitalNo as ID
+            await setDoc(doc(db, "patient_data", updated.hospitalNo), updated, { merge: true });
+            console.log("Patient data saved");
+            showToast("Patient details saved!", "success");
+            setSelectedPatient(null);
+        } catch (error) {
+            console.error("Error saving patient:", error);
+            showToast("Failed to save patient details.", "error");
+            throw error; // Re-throw so modal knows it failed
+        }
+    };
+
+    const handleDischargeClick = (patient: Patient) => {
+        setSelectedPatient(null);
+        setDischargingPatient(patient);
+    };
+
+    const handleTransfer = async (patient: Patient, consultant: string) => {
+        if (!unit) return;
+
+        try {
+            // Save to 'transfers' collection
+            await addDoc(collection(db, "transfers"), {
+                hospitalNo: patient.hospitalNo,
+                newConsultant: consultant,
+                unitId: unitId,
+                timestamp: new Date().toISOString()
+            });
+
+            console.log("Transfer saved to Firebase");
+            showToast(`Transferred ${patient.name} to ${unit.name} (${consultant}).`, "success");
+            setSelectedPatient(null);
+        } catch (error) {
+            console.error("Error transferring patient:", error);
+            showToast("Failed to transfer patient.", "error");
+        }
+    };
+
+    const handleRemove = async (patient: Patient) => {
+        if (!confirm(`Remove ${patient.name} from this unit list?`)) return;
+
+        try {
+            // Find the transfer record
+            const q = query(collection(db, "transfers"), where("hospitalNo", "==", patient.hospitalNo));
+            const snapshot = await getDocs(q);
+
+            if (snapshot.empty) {
+                showToast("Could not find transfer record to remove.", "error");
+                return;
+            }
+
+            // Delete all matching transfer records
+            const deletePromises = snapshot.docs.map(doc => deleteDoc(doc.ref));
+            await Promise.all(deletePromises);
+
+            // Also delete from patient_data (Hard Delete)
+            await deleteDoc(doc(db, "patient_data", patient.hospitalNo));
+
+            showToast("Patient removed from database.", "success");
+            setSelectedPatient(null);
+        } catch (error) {
+            console.error("Error removing patient:", error);
+            showToast("Failed to remove patient.", "error");
+        }
+    };
+
+    const handleConfirmDischarge = async (dischargeData: any) => {
+        try {
+            // 1. Save to 'discharges' collection
+            await addDoc(collection(db, "discharges"), {
+                ...dischargeData,
+                timestamp: new Date().toISOString(),
+                unitId: unitId
+            });
+
+            // 2. Update patient status to 'discharged' in 'patient_data'
+            if (dischargeData.hospitalNo) {
+                await setDoc(doc(db, "patient_data", dischargeData.hospitalNo), {
+                    status: "discharged"
+                }, { merge: true });
+            }
+
+            console.log("Discharge saved to Firebase");
+
+            setDischargingPatient(null);
+            showToast("Patient discharged successfully!", "success");
+        } catch (error) {
+            console.error("Error discharging patient:", error);
+            showToast("Failed to save discharge data.", "error");
+        }
+    };
+
+    if (!unit) return <div className="p-8 text-white">Unit not found</div>;
+
+    return (
+        <main className="min-h-screen bg-background pb-20">
+            {/* Header */}
+            <div className="sticky top-0 z-20 glass border-b border-white/10 p-4 flex flex-col space-y-4 sm:flex-row sm:justify-between sm:items-center sm:space-y-0">
+                <div>
+                    <h1 className="text-2xl font-bold text-white">{unit.name}</h1>
+                    <p className="text-xs text-gray-400">{unitTotalPatients} Patients Admitted</p>
+                </div>
+                <div className="flex items-center space-x-2">
+                    <ViewSwitcher currentView={viewMode} onViewChange={setViewMode} />
+                    <button
+                        onClick={() => router.push("/discharges")}
+                        className="flex items-center space-x-2 rounded-full bg-white/5 px-3 py-1.5 text-xs font-medium text-gray-300 hover:bg-white/10 hover:text-white"
+                    >
+                        <FileOutput size={14} />
+                        <span className="hidden sm:inline">Discharges</span>
+                    </button>
+                    <button
+                        onClick={() => router.push(`/admin/bed-map?unitId=${unitId}`)}
+                        className="flex items-center space-x-2 rounded-full bg-white/5 px-3 py-1.5 text-xs font-medium text-gray-300 hover:bg-white/10 hover:text-white"
+                    >
+                        <Map size={14} />
+                        <span className="hidden sm:inline">Round Map</span>
+                    </button>
+                </div>
+            </div>
+
+            {/* Content */}
+            <div className="p-4">
+                {loading ? (
+                    <div className="flex justify-center py-20">
+                        <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+                    </div>
+                ) : (
+                    <>
+                        {activeTab === "unit" && (
+                            <PatientList
+                                patients={displayedPatients}
+                                title="My Unit"
+                                onPatientClick={handlePatientClick}
+                                viewMode={viewMode}
+                                unitId={unitId}
+                                onUpdatePatient={handleSavePatient}
+                                onDischargePatient={handleDischargeClick}
+                                onTransferPatient={handleTransfer}
+                                consultants={unit.consultants}
+                                onRemovePatient={handleRemove}
+                            />
+                        )}
+                        {activeTab === "main" && (
+                            <PatientList
+                                patients={displayedPatients}
+                                title="All Patients"
+                                onPatientClick={handlePatientClick}
+                                readOnly={true}
+                                groupByDate={true}
+                                highlightConsultants={unit.consultants}
+                                viewMode={viewMode === "cards" ? "calendar" : viewMode} // Default Main List to Calendar if cards
+                                unitId={unitId}
+                                onUpdatePatient={handleSavePatient}
+                                onDischargePatient={handleDischargeClick}
+                                onTransferPatient={handleTransfer}
+                                consultants={unit.consultants}
+                                onRemovePatient={handleRemove}
+                            />
+                        )}
+                        {activeTab === "consultant" && (
+                            <div className="space-y-4">
+                                <div className="flex justify-end space-x-2">
+                                    <button onClick={() => setCollapsedConsultants({})} className="text-xs text-primary hover:text-primary/80">Expand All</button>
+                                    <span className="text-xs text-gray-600">|</span>
+                                    <button
+                                        onClick={() => {
+                                            const allCollapsed = unit.consultants.reduce((acc, c) => ({ ...acc, [c]: true }), {});
+                                            setCollapsedConsultants(allCollapsed);
+                                        }}
+                                        className="text-xs text-primary hover:text-primary/80"
+                                    >
+                                        Collapse All
+                                    </button>
+                                </div>
+                                {unit.consultants.map((consultant) => {
+                                    const consultantPatients = displayedPatients.filter(p =>
+                                        p.consultant?.toLowerCase().includes(consultant.toLowerCase())
+                                    );
+                                    if (consultantPatients.length === 0) return null;
+                                    return (
+                                        <PatientList
+                                            key={consultant}
+                                            patients={consultantPatients}
+                                            title={consultant}
+                                            onPatientClick={handlePatientClick}
+                                            collapsible={true}
+                                            isCollapsed={collapsedConsultants[consultant]}
+                                            onToggleCollapse={() => {
+                                                setCollapsedConsultants(prev => ({
+                                                    ...prev,
+                                                    [consultant]: !prev[consultant]
+                                                }));
+                                            }}
+                                            viewMode={viewMode === "cards" ? "grid" : viewMode} // Default Consultant to Grid if cards
+                                            unitId={unitId}
+                                            onUpdatePatient={handleSavePatient}
+                                            onDischargePatient={handleDischargeClick}
+                                            onTransferPatient={handleTransfer}
+                                            consultants={unit.consultants}
+                                            onRemovePatient={handleRemove}
+                                        />
+                                    );
+                                })}
+                            </div>
+                        )}
+                    </>
+                )}
+            </div>
+
+            {/* Modal */}
+            {selectedPatient && (
+                (activeTab === "main" && (viewMode === "cards" || viewMode === "calendar")) ? (
+                    <PatientSummaryModal
+                        patient={selectedPatient}
+                        onClose={() => setSelectedPatient(null)}
+                        onTransfer={handleTransfer}
+                        consultants={unit.consultants}
+                    />
+                ) : (
+                    <PatientDetailModal
+                        patient={selectedPatient}
+                        onClose={() => setSelectedPatient(null)}
+                        onSave={handleSavePatient}
+                        onDischarge={handleDischargeClick}
+                        readOnly={activeTab === "main"}
+                        onTransfer={handleTransfer}
+                        consultants={unit.consultants}
+                        onRemove={activeTab === "unit" ? handleRemove : undefined}
+                    />
+                )
+            )}
+
+            {/* Discharge Form */}
+            {dischargingPatient && (
+                <DischargeForm
+                    patient={dischargingPatient}
+                    onClose={() => setDischargingPatient(null)}
+                    onConfirmDischarge={handleConfirmDischarge}
+                />
+            )}
+
+            {/* Bottom Navigation */}
+            <div className="fixed bottom-0 left-0 right-0 z-30 glass border-t border-white/10 px-6 py-3">
+                <div className="flex justify-around">
+                    <NavButton
+                        active={activeTab === "unit"}
+                        onClick={() => setActiveTab("unit")}
+                        icon={<Users size={20} />}
+                        label="Unit"
+                    />
+                    <NavButton
+                        active={activeTab === "main"}
+                        onClick={() => setActiveTab("main")}
+                        icon={<List size={20} />}
+                        label="Main List"
+                    />
+                    <NavButton
+                        active={activeTab === "consultant"}
+                        onClick={() => setActiveTab("consultant")}
+                        icon={<Bed size={20} />}
+                        label="Consultants"
+                    />
+                </div>
+            </div>
+        </main>
+    );
+}
