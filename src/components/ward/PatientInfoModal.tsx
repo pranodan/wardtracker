@@ -1,6 +1,6 @@
 "use client";
 
-import { Patient } from "@/types";
+import { Patient, UNITS } from "@/types";
 import { X, Phone, Edit, Activity, FileText, Calendar, User, MapPin } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -14,11 +14,17 @@ export default function PatientInfoModal({ patient, onClose, onEdit }: PatientIn
     if (!patient) return null;
 
     const handleCall = () => {
-        if (patient.contactNo) {
-            window.location.href = `tel:${patient.contactNo}`;
+        if (patient.mobile) {
+            window.location.href = `tel:${patient.mobile}`;
         } else {
             alert("No contact number available");
         }
+    };
+
+    const getUnitName = (consultantName?: string) => {
+        if (!consultantName) return "N/A";
+        const found = UNITS.find(u => u.consultants.some(c => c.toLowerCase().includes(consultantName.toLowerCase())));
+        return found ? found.name : "General";
     };
 
     return (
@@ -105,7 +111,7 @@ export default function PatientInfoModal({ patient, onClose, onEdit }: PatientIn
                             </div>
                             <div className="rounded-xl bg-white/5 p-3">
                                 <div className="mb-1 text-xs text-gray-500">Unit</div>
-                                <div className="text-sm font-medium text-white">{patient.unit || "N/A"}</div>
+                                <div className="text-sm font-medium text-white">{getUnitName(patient.consultant)}</div>
                             </div>
                         </div>
                     </div>
