@@ -3,6 +3,7 @@
 import { UNITS } from "@/types";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
+import { useState, useEffect } from "react";
 
 const UNIT_COLORS: Record<number, string> = {
     1: "#00f3ff", // Hip
@@ -14,6 +15,19 @@ const UNIT_COLORS: Record<number, string> = {
 
 export default function UnitSphere() {
     const router = useRouter();
+    const [mounted, setMounted] = useState(false);
+    const [randomValues, setRandomValues] = useState<{ x: number[], y: number[], duration: number }[]>([]);
+
+    useEffect(() => {
+        setMounted(true);
+        setRandomValues(UNITS.map(() => ({
+            y: [0, (Math.random() * 20 - 10), 0],
+            x: [0, (Math.random() * 20 - 10), 0, (Math.random() * 20 - 10), 0],
+            duration: 4 + Math.random() * 2
+        })));
+    }, []);
+
+    if (!mounted) return null; // Or return a static loading state
 
     return (
         <div className="flex h-[50vh] w-full items-center justify-center">
@@ -24,11 +38,11 @@ export default function UnitSphere() {
                         whileHover={{ scale: 1.1 }}
                         whileTap={{ scale: 0.95 }}
                         animate={{
-                            y: [0, (Math.random() * 20 - 10), 0],
-                            x: [0, (Math.random() * 20 - 10), 0, (Math.random() * 20 - 10), 0],
+                            y: randomValues[i]?.y || [0, 0, 0],
+                            x: randomValues[i]?.x || [0, 0, 0, 0, 0],
                         }}
                         transition={{
-                            duration: 4 + Math.random() * 2, // Random duration for organic feel
+                            duration: randomValues[i]?.duration || 4,
                             repeat: Infinity,
                             ease: "easeInOut",
                             delay: i * 0.5,

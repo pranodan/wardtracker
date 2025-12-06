@@ -44,3 +44,26 @@ export function getBedGroup(bedNo: string, groups: BedGroup[] = DEFAULT_BED_GROU
     }
     return "General Ward"; // Fallback
 }
+
+import { Patient } from "@/types";
+
+export function sortPatientsByBed(patients: Patient[], groups: BedGroup[] = DEFAULT_BED_GROUPS): Patient[] {
+    return [...patients].sort((a, b) => {
+        const groupA = getBedGroup(a.bedNo, groups);
+        const groupB = getBedGroup(b.bedNo, groups);
+
+        const indexA = groups.findIndex(g => g.name === groupA);
+        const indexB = groups.findIndex(g => g.name === groupB);
+
+        // Sort by Group Index first
+        if (indexA !== -1 && indexB !== -1 && indexA !== indexB) {
+            return indexA - indexB;
+        }
+        // Put known groups before unknown
+        if (indexA !== -1 && indexB === -1) return -1;
+        if (indexA === -1 && indexB !== -1) return 1;
+
+        // If in same group (or both unknown), sort alphanumerically
+        return a.bedNo.localeCompare(b.bedNo, undefined, { numeric: true });
+    });
+}

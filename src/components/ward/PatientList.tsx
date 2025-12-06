@@ -4,6 +4,7 @@ import { Patient } from "@/types";
 import { useState, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Search, ChevronDown, ChevronUp } from "lucide-react";
+import { parseAnyDate } from "@/lib/utils";
 import PatientDetailModal from "./PatientDetailModal";
 import PatientSummaryModal from "./PatientSummaryModal";
 import DischargeForm from "./DischargeForm";
@@ -27,6 +28,7 @@ interface PatientListProps {
     collapsible?: boolean;
     isCollapsed?: boolean;
     onToggleCollapse?: () => void;
+    groups?: import("@/utils/bedGrouping").BedGroup[];
 }
 
 export default function PatientList({
@@ -37,11 +39,13 @@ export default function PatientList({
     consultants,
     onRemovePatient,
     viewMode = "cards",
+    groups,
     onPatientClick,
     title,
     collapsible,
     isCollapsed: externalIsCollapsed,
-    onToggleCollapse
+    onToggleCollapse,
+    groupByDate
 }: PatientListProps) {
     const [searchQuery, setSearchQuery] = useState("");
     const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
@@ -62,11 +66,11 @@ export default function PatientList({
     const filteredPatients = useMemo(() => {
         const lowerQuery = searchQuery.toLowerCase();
         return patients.filter(p =>
-            p.name.toLowerCase().includes(lowerQuery) ||
+            (p.name?.toLowerCase() || "").includes(lowerQuery) ||
             p.hospitalNo?.includes(lowerQuery) ||
-            p.bedNo?.toLowerCase().includes(lowerQuery) ||
-            p.consultant?.toLowerCase().includes(lowerQuery) ||
-            p.diagnosis?.toLowerCase().includes(lowerQuery)
+            (p.bedNo?.toLowerCase() || "").includes(lowerQuery) ||
+            (p.consultant?.toLowerCase() || "").includes(lowerQuery) ||
+            (p.diagnosis?.toLowerCase() || "").includes(lowerQuery)
         );
     }, [patients, searchQuery]);
 
@@ -131,36 +135,116 @@ export default function PatientList({
                         exit={{ opacity: 0, height: 0 }}
                     >
                         {viewMode === "table" ? (
-                            <div className="overflow-hidden rounded-xl border border-white/10 bg-white/5">
-                                <table className="w-full text-left text-sm text-gray-400">
-                                    <thead className="bg-black/20 text-xs font-bold uppercase text-gray-500">
-                                        <tr>
-                                            <th className="p-4">ID</th>
-                                            <th className="p-4">Name</th>
-                                            <th className="p-4">Age/Sex</th>
-                                            <th className="p-4">Phone</th>
-                                            <th className="p-4">Bed</th>
-                                            <th className="p-4">DOA</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="divide-y divide-white/5">
-                                        {filteredPatients.map(patient => (
-                                            <tr
-                                                key={patient.id}
-                                                onClick={() => handleCardClick(patient)}
-                                                className="cursor-pointer hover:bg-white/5"
-                                            >
-                                                <td className="p-4 text-xs">{patient.hospitalNo}</td>
-                                                <td className="p-4 font-bold text-white uppercase">{patient.name}</td>
-                                                <td className="p-4 uppercase">{patient.ageGender}</td>
-                                                <td className="p-4">{patient.contactNo}</td>
-                                                <td className="p-4 font-bold text-primary">{patient.bedNo}</td>
-                                                <td className="p-4 text-xs">{patient.ipDate}</td>
+                            groupByDate ? (
+                                <div className="space-y-8">
+                                    {(() => {
+                                        // 1. Group Patients
+                                        const grouped = filteredPatients.reduce((acc, patient) => {
+                                            const date = patient.ipDate || "Unknown Date";
+                                            if (!acc[date]) acc[date] = [];
+                                            acc[date].push(patient);
+                                            return acc;
+                                        }, {} as Record<string, Patient[]>);
+
+                                        // 2. Sort Dates
+                                        const sortedDates = Object.keys(grouped).sort((a, b) => {
+                                            if (a === "Unknown Date") return 1;
+                                            if (b === "Unknown Date") return -1;
+                                            try {
+                                                const dateA = new Date(a);
+                                                const dateB = new Date(b);
+                                                if (isNaN(dateA.getTime())) return 1;
+                                                if (isNaN(dateB.getTime())) return -1;
+                                                return dateB.getTime() - dateA.getTime();
+                                            } catch { return 0; }
+                                        });
+
+                                        // 3. Render Groups
+                                        return sortedDates.map(dateStr => (
+                                            <div key={dateStr} className="space-y-3">
+                                                <h3 className="text-lg font-bold text-primary/80 uppercase tracking-wider pl-2 border-l-4 border-primary/50">
+                                                    {(() => {
+                                                        if (dateStr === "Unknown Date") return "Unknown Date";
+                                                        try {
+                                                            const d = new Date(dateStr);
+                                                            if (isNaN(d.getTime())) return dateStr;
+                                                            const today = new Date();
+                                                            const yesterday = new Date();
+                                                            yesterday.setDate(yesterday.getDate() - 1);
+
+                                                            if (d.toDateString() === today.toDateString()) return "Today";
+                                                            if (d.toDateString() === yesterday.toDateString()) return "Yesterday";
+                                                            return d.toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+                                                        } catch { return dateStr; }
+                                                    })()}
+                                                    <span className="ml-2 text-sm text-gray-500">({grouped[dateStr].length})</span>
+                                                </h3>
+                                                <div className="overflow-hidden rounded-xl border border-white/10 bg-white/5">
+                                                    <table className="w-full text-left text-sm text-gray-400">
+                                                        <thead className="bg-black/20 text-xs font-bold uppercase text-gray-500">
+                                                            <tr>
+                                                                <th className="p-4">ID</th>
+                                                                <th className="p-4">Name</th>
+                                                                <th className="p-4">Age/Sex</th>
+                                                                <th className="p-4">Phone</th>
+                                                                <th className="p-4">Bed</th>
+                                                                <th className="p-4">DOA</th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody className="divide-y divide-white/5">
+                                                            {grouped[dateStr].map(patient => (
+                                                                <tr
+                                                                    key={patient.id}
+                                                                    onClick={() => handleCardClick(patient)}
+                                                                    className="cursor-pointer hover:bg-white/5"
+                                                                >
+                                                                    <td className="p-4 text-xs">{patient.hospitalNo}</td>
+                                                                    <td className="p-4 font-bold text-white uppercase">{patient.name}</td>
+                                                                    <td className="p-4 uppercase">{patient.ageGender}</td>
+                                                                    <td className="p-4">{patient.mobile || "N/A"}</td>
+                                                                    <td className="p-4 font-bold text-primary">{patient.bedNo}</td>
+                                                                    <td className="p-4 text-xs">{patient.ipDate}</td>
+                                                                </tr>
+                                                            ))}
+                                                        </tbody>
+                                                    </table>
+                                                </div>
+                                            </div>
+                                        ));
+                                    })()}
+                                </div>
+                            ) : (
+                                <div className="overflow-hidden rounded-xl border border-white/10 bg-white/5">
+                                    <table className="w-full text-left text-sm text-gray-400">
+                                        <thead className="bg-black/20 text-xs font-bold uppercase text-gray-500">
+                                            <tr>
+                                                <th className="p-4">ID</th>
+                                                <th className="p-4">Name</th>
+                                                <th className="p-4">Age/Sex</th>
+                                                <th className="p-4">Phone</th>
+                                                <th className="p-4">Bed</th>
+                                                <th className="p-4">DOA</th>
                                             </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
-                            </div>
+                                        </thead>
+                                        <tbody className="divide-y divide-white/5">
+                                            {filteredPatients.map(patient => (
+                                                <tr
+                                                    key={patient.id}
+                                                    onClick={() => handleCardClick(patient)}
+                                                    className="cursor-pointer hover:bg-white/5"
+                                                >
+                                                    <td className="p-4 text-xs">{patient.hospitalNo}</td>
+                                                    <td className="p-4 font-bold text-white uppercase">{patient.name}</td>
+                                                    <td className="p-4 uppercase">{patient.ageGender}</td>
+                                                    <td className="p-4">{patient.mobile}</td>
+                                                    <td className="p-4 font-bold text-primary">{patient.bedNo}</td>
+                                                    <td className="p-4 text-xs">{patient.ipDate}</td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            )
                         ) : viewMode === "calendar" ? (
                             <CalendarView
                                 patients={filteredPatients}
@@ -177,6 +261,7 @@ export default function PatientList({
                                         await onUpdatePatient(p);
                                     }
                                 }}
+                                groups={groups}
                             />
                         )}
                     </motion.div>

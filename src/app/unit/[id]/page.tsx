@@ -8,26 +8,30 @@ import PatientList from "@/components/ward/PatientList";
 import PatientDetailModal from "@/components/ward/PatientDetailModal";
 import PatientSummaryModal from "@/components/ward/PatientSummaryModal";
 import DischargeForm from "@/components/ward/DischargeForm";
-import { sortPatientsByBed } from "@/lib/bed-sorting";
-import { Users, Bed, List, Map, FileOutput } from "lucide-react";
+import { sortPatientsByBed } from "@/utils/bedGrouping";
+import { Users, Bed, List, Map, FileOutput, RefreshCcw } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { db } from "@/lib/firebase";
 import { collection, addDoc, query, where, getDocs, deleteDoc, setDoc, doc } from "firebase/firestore";
 import { useToast } from "@/components/ui/Toast";
 import ViewSwitcher, { ViewMode } from "@/components/ward/ViewSwitcher";
+import { useBedGrouping } from "@/hooks/useBedGrouping";
 
 export default function UnitPage() {
     const params = useParams();
     const router = useRouter();
     const unitId = Number(params.id);
     const unit = UNITS.find((u) => u.id === unitId);
-    const { patients, loading } = usePatients();
+    const { patients, loading, refresh } = usePatients();
     const [activeTab, setActiveTab] = useState<"unit" | "main" | "consultant">("unit");
     const [viewMode, setViewMode] = useState<ViewMode>("cards");
     const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
     const [dischargingPatient, setDischargingPatient] = useState<Patient | null>(null);
     const [collapsedConsultants, setCollapsedConsultants] = useState<Record<string, boolean>>({});
     const { showToast } = useToast();
+
+    // Fetch dynamic bed grouping
+    const { groups, loading: groupsLoading } = useBedGrouping(unitId);
 
     // Calculate total patients for this unit (regardless of active tab)
     const unitTotalPatients = useMemo(() => {
@@ -53,13 +57,26 @@ export default function UnitPage() {
 
             if (activeTab === "unit") {
                 // Only sort by bed in Unit view
-                return sortPatientsByBed(filtered);
+                return sortPatientsByBed(filtered, groups);
             }
             return filtered;
         }
 
+        if (activeTab === "main") {
+            return filtered.sort((a, b) => {
+                const dateA = new Date(a.ipDate || "").getTime();
+                const dateB = new Date(b.ipDate || "").getTime();
+                // Handle invalid dates (push to bottom)
+                if (isNaN(dateA) && isNaN(dateB)) return 0;
+                if (isNaN(dateA)) return 1;
+                if (isNaN(dateB)) return -1;
+                // Descending order (B - A)
+                return dateB - dateA;
+            });
+        }
+
         return filtered;
-    }, [patients, activeTab, unit]);
+    }, [patients, activeTab, unit, groups]);
 
     const handlePatientClick = (patient: Patient) => {
         setSelectedPatient(patient);
@@ -96,7 +113,14 @@ export default function UnitPage() {
                 timestamp: new Date().toISOString()
             });
 
-            console.log("Transfer saved to Firebase");
+            // Save Snapshot of Patient Data to 'patient_data' so they persist even if removed from Sheet
+            await setDoc(doc(db, "patient_data", patient.hospitalNo), {
+                ...patient,
+                consultant: consultant, // Update consultant in snapshot too
+                lastUpdated: new Date().toISOString()
+            }, { merge: true });
+
+            console.log("Transfer and Snapshot saved to Firebase");
             showToast(`Transferred ${patient.name} to ${unit.name} (${consultant}).`, "success");
             setSelectedPatient(null);
         } catch (error) {
@@ -172,6 +196,17 @@ export default function UnitPage() {
                 <div className="flex items-center space-x-2">
                     <ViewSwitcher currentView={viewMode} onViewChange={setViewMode} />
                     <button
+                        onClick={refresh}
+                        disabled={loading}
+                        className={cn(
+                            "flex items-center space-x-2 rounded-full bg-white/5 px-3 py-1.5 text-xs font-medium text-gray-300 hover:bg-white/10 hover:text-white transition-all",
+                            loading && "opacity-50 cursor-not-allowed"
+                        )}
+                    >
+                        <RefreshCcw size={14} className={cn("transition-all", loading && "animate-spin")} />
+                        <span className="hidden sm:inline">{loading ? "Syncing..." : "Refresh"}</span>
+                    </button>
+                    <button
                         onClick={() => router.push("/discharges")}
                         className="flex items-center space-x-2 rounded-full bg-white/5 px-3 py-1.5 text-xs font-medium text-gray-300 hover:bg-white/10 hover:text-white"
                     >
@@ -208,6 +243,7 @@ export default function UnitPage() {
                                 onTransferPatient={handleTransfer}
                                 consultants={unit.consultants}
                                 onRemovePatient={handleRemove}
+                                groups={groups}
                             />
                         )}
                         {activeTab === "main" && (
@@ -225,6 +261,7 @@ export default function UnitPage() {
                                 onTransferPatient={handleTransfer}
                                 consultants={unit.consultants}
                                 onRemovePatient={handleRemove}
+                                groups={groups}
                             />
                         )}
                         {activeTab === "consultant" && (
@@ -268,6 +305,7 @@ export default function UnitPage() {
                                             onTransferPatient={handleTransfer}
                                             consultants={unit.consultants}
                                             onRemovePatient={handleRemove}
+                                            groups={groups}
                                         />
                                     );
                                 })}
@@ -277,9 +315,8 @@ export default function UnitPage() {
                 )}
             </div>
 
-            {/* Modal */}
             {selectedPatient && (
-                (activeTab === "main" && (viewMode === "cards" || viewMode === "calendar")) ? (
+                activeTab === "main" ? (
                     <PatientSummaryModal
                         patient={selectedPatient}
                         onClose={() => setSelectedPatient(null)}
@@ -292,7 +329,7 @@ export default function UnitPage() {
                         onClose={() => setSelectedPatient(null)}
                         onSave={handleSavePatient}
                         onDischarge={handleDischargeClick}
-                        readOnly={activeTab === "main"}
+                        readOnly={false}
                         onTransfer={handleTransfer}
                         consultants={unit.consultants}
                         onRemove={activeTab === "unit" ? handleRemove : undefined}
@@ -333,5 +370,21 @@ export default function UnitPage() {
                 </div>
             </div>
         </main>
+    );
+}
+
+// Subcomponents helper
+function NavButton({ active, onClick, icon, label }: { active: boolean; onClick: () => void; icon: React.ReactNode; label: string }) {
+    return (
+        <button
+            onClick={onClick}
+            className={cn(
+                "flex flex-col items-center space-y-1 rounded-lg px-4 py-2 transition-all",
+                active ? "bg-primary/20 text-primary" : "text-gray-400 hover:text-white"
+            )}
+        >
+            {icon}
+            <span className="text-[10px] font-medium uppercase tracking-wider">{label}</span>
+        </button>
     );
 }

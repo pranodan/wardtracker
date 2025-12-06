@@ -70,10 +70,12 @@ export default function PatientSummaryModal({ patient, onClose, onTransfer, cons
 
                             {/* Phone */}
                             <div className="flex items-center space-x-3 rounded-lg bg-white/5 p-3">
-                                <Phone className="text-primary" size={20} />
+                                <a href={`tel:${patient.mobile}`} className="flex items-center justify-center rounded-full bg-primary/20 p-2 text-primary hover:bg-primary/30 transition-colors">
+                                    <Phone size={16} />
+                                </a>
                                 <div>
                                     <p className="text-[10px] uppercase text-gray-500">Contact</p>
-                                    <p className="font-bold text-white">{patient.contactNo || "N/A"}</p>
+                                    <p className="font-bold text-white">{patient.mobile || "N/A"}</p>
                                 </div>
                             </div>
 
@@ -91,7 +93,7 @@ export default function PatientSummaryModal({ patient, onClose, onTransfer, cons
                                 <User className="text-primary" size={20} />
                                 <div>
                                     <p className="text-[10px] uppercase text-gray-500">Consultant</p>
-                                    <p className="font-bold text-white truncate max-w-[100px]" title={patient.consultant}>
+                                    <p className="font-bold text-white text-sm" title={patient.consultant}>
                                         {patient.consultant || "Unassigned"}
                                     </p>
                                 </div>

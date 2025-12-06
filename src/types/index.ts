@@ -27,32 +27,6 @@ export interface TrackingEntry {
     value: string;
 }
 
-export interface Patient {
-    id: string; // Hospital No
-    ipDate: string;
-    hospitalNo: string;
-    inPatNo: string;
-    name: string;
-    department: string;
-    consultant: string;
-    mobile: string;
-    ageGender: string;
-    bedNo: string;
-
-    // Extended data (from Firebase or local state)
-    diagnosis?: string;
-    procedure?: string;
-    plan?: string;
-    tracking?: TrackingEntry[];
-    status?: "admitted" | "marked_for_discharge" | "discharged";
-}
-
-export interface TrackingEntry {
-    id: string;
-    date: string;
-    parameter: string;
-    value: string;
-}
 
 export interface Unit {
     id: number;

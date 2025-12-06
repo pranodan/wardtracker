@@ -2,7 +2,8 @@
 
 import { Patient } from "@/types";
 import { motion } from "framer-motion";
-import { differenceInDays, parseISO, isValid, compareDesc } from "date-fns";
+import { differenceInDays, isValid, compareDesc } from "date-fns";
+import { cn, parseAnyDate } from "@/lib/utils";
 
 interface PatientCardProps {
     patient: Patient;
@@ -17,8 +18,8 @@ export default function PatientCard({ patient, onClick }: PatientCardProps) {
     const getPOD = (dateString?: string) => {
         if (!dateString) return "";
         try {
-            const date = parseISO(dateString);
-            if (!isValid(date)) return "";
+            const date = parseAnyDate(dateString);
+            if (!date || !isValid(date)) return "";
             const today = new Date();
             const diff = differenceInDays(today, date);
             return diff >= 0 ? `${diff}POD` : "";
@@ -29,17 +30,19 @@ export default function PatientCard({ patient, onClick }: PatientCardProps) {
 
     if (patient.procedure) {
         const pod = getPOD(patient.dop);
+        const date = parseAnyDate(patient.dop);
         procedures.push({
             text: pod ? `${pod} ${patient.procedure}` : patient.procedure,
-            date: patient.dop ? parseISO(patient.dop) : new Date(0)
+            date: date || new Date(0)
         });
     }
     if (patient.surgeries) {
         patient.surgeries.forEach(s => {
             const pod = getPOD(s.dop);
+            const date = parseAnyDate(s.dop);
             procedures.push({
                 text: pod ? `${pod} ${s.procedure}` : s.procedure,
-                date: s.dop ? parseISO(s.dop) : new Date(0)
+                date: date || new Date(0)
             });
         });
     }
@@ -55,7 +58,7 @@ export default function PatientCard({ patient, onClick }: PatientCardProps) {
 
     return (
         <motion.div
-            layout
+            // layout
             onClick={() => onClick(patient)}
             className="group relative cursor-pointer overflow-hidden rounded-xl border border-white/5 bg-[#121212] p-4 shadow-lg transition-colors hover:border-primary/30 hover:bg-[#1a1a1a]"
         >
@@ -91,7 +94,24 @@ export default function PatientCard({ patient, onClick }: PatientCardProps) {
                             </div>
                         )
                     ) : (
-                        <span className="text-[10px] text-gray-600 italic">No Procedures</span>
+                        <div className="flex flex-col space-y-1">
+                            {patient.ipDate && (
+                                <span className="text-[10px] font-bold text-gray-500 uppercase">
+                                    DOA: {patient.ipDate}
+                                    {(() => {
+                                        try {
+                                            const date = parseAnyDate(patient.ipDate);
+                                            if (date && isValid(date)) {
+                                                const diff = differenceInDays(new Date(), date);
+                                                if (diff >= 0) return `, ${diff}DOA`;
+                                            }
+                                        } catch (e) { return ""; }
+                                        return "";
+                                    })()}
+                                </span>
+                            )}
+                            <span className="text-[10px] text-gray-600 italic">No Procedures</span>
+                        </div>
                     )}
                 </div>
             </div>

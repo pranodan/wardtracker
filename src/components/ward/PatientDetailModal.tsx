@@ -44,6 +44,17 @@ export default function PatientDetailModal({ patient, onClose, onSave, onDischar
     if (!patient) return null;
 
     const handleSave = async () => {
+        // Validation: Procedure Date is required if Procedure Name is entered
+        if (formData.procedure && !formData.dop) {
+            alert("Please enter the Date of Procedure (DOP) for the primary procedure.");
+            return;
+        }
+
+        if (formData.surgeries && formData.surgeries.some(s => s.procedure && !s.dop)) {
+            alert("Please enter the Date of Procedure (DOP) for all added surgeries.");
+            return;
+        }
+
         setIsSaving(true);
         try {
             // Ensure we pass the full patient object merged with updates

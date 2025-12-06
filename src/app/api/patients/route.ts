@@ -9,7 +9,14 @@ export async function GET() {
         // Helper to find value by fuzzy key (ignoring case and extra spaces)
         const getValue = (row: any, keyPart: string) => {
             const key = Object.keys(row).find(k => k.toLowerCase().replace(/\s+/g, ' ').includes(keyPart.toLowerCase()));
-            return key ? row[key] : "";
+            const val = key ? row[key] : "";
+
+            // Sanitize Excel/Sheet errors
+            if (typeof val === "string" && (val.includes("#NAME?") || val.includes("#REF!") || val.includes("#VALUE!") || val.includes("#N/A"))) {
+                return "";
+            }
+
+            return val;
         };
 
         // Transform data to match Patient interface

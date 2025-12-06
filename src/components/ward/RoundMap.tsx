@@ -3,7 +3,7 @@
 import { Patient } from "@/types";
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { getBedGroup, BED_GROUPS } from "@/lib/bed-sorting";
+import { getBedGroup, DEFAULT_BED_GROUPS } from "@/utils/bedGrouping";
 import PatientCard from "./PatientCard";
 import { ChevronDown, ChevronRight } from "lucide-react";
 
@@ -12,14 +12,15 @@ interface RoundMapProps {
     onPatientClick: (patient: Patient) => void;
     onSaveLayout?: (patients: Patient[]) => void;
     grouped?: boolean;
+    groups?: import("@/utils/bedGrouping").BedGroup[];
 }
 
-export default function RoundMap({ patients, onPatientClick, onSaveLayout, grouped = true }: RoundMapProps) {
+export default function RoundMap({ patients, onPatientClick, onSaveLayout, grouped = true, groups = DEFAULT_BED_GROUPS }: RoundMapProps) {
     const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
 
     // Group patients
     const groupedPatients = patients.reduce((acc, patient) => {
-        const group = getBedGroup(patient.bedNo);
+        const group = getBedGroup(patient.bedNo, groups);
         if (!acc[group]) acc[group] = [];
         acc[group].push(patient);
         return acc;
@@ -27,8 +28,8 @@ export default function RoundMap({ patients, onPatientClick, onSaveLayout, group
 
     // Get groups in order, plus any others found
     const sortedGroupNames = [
-        ...BED_GROUPS.map(g => g.name),
-        ...Object.keys(groupedPatients).filter(k => !BED_GROUPS.some(bg => bg.name === k))
+        ...groups.map(g => g.name),
+        ...Object.keys(groupedPatients).filter(k => !groups.some(bg => bg.name === k))
     ];
 
     const toggleGroup = (groupName: string) => {

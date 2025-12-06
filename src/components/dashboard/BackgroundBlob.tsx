@@ -2,10 +2,20 @@
 
 import { Canvas, useFrame } from "@react-three/fiber";
 import { Points, PointMaterial } from "@react-three/drei";
-import { useMemo, useRef } from "react";
+import { useMemo, useRef, useState, useEffect } from "react";
 import * as THREE from "three";
 
 export default function BackgroundBlob() {
+    const [mounted, setMounted] = useState(false);
+
+    useEffect(() => {
+        setMounted(true);
+    }, []);
+
+    if (!mounted) return (
+        <div className="fixed inset-0 -z-10 h-screen w-screen overflow-hidden bg-[#050505]" />
+    );
+
     return (
         <div className="fixed inset-0 -z-10 h-screen w-screen overflow-hidden bg-[#050505]">
             <Canvas camera={{ position: [0, 5, 10], fov: 60 }}>
@@ -107,4 +117,4 @@ function Stars() {
     );
 }
 
-import { useState } from "react";
+

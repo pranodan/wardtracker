@@ -3,7 +3,8 @@
 import { Patient } from "@/types";
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { format, parseISO, isToday, isYesterday, isValid, compareDesc } from "date-fns";
+import { format, isToday, isYesterday, isValid, compareDesc } from "date-fns";
+import { parseAnyDate } from "@/lib/utils";
 import PatientCard from "./PatientCard";
 import { ChevronDown, ChevronRight } from "lucide-react";
 
@@ -37,14 +38,14 @@ export default function CalendarView({ patients, onPatientClick }: CalendarViewP
 
         let dateA, dateB;
         try {
-            dateA = parseISO(a);
-            dateB = parseISO(b);
+            dateA = parseAnyDate(a);
+            dateB = parseAnyDate(b);
         } catch (e) {
             return 0;
         }
 
-        if (!isValid(dateA)) return 1;
-        if (!isValid(dateB)) return -1;
+        if (!dateA || !isValid(dateA)) return 1;
+        if (!dateB || !isValid(dateB)) return -1;
         return compareDesc(dateA, dateB);
     });
 
@@ -60,8 +61,8 @@ export default function CalendarView({ patients, onPatientClick }: CalendarViewP
     const getDateHeader = (dateStr: string) => {
         if (dateStr === "Unknown Date") return "Unknown Date";
         try {
-            const date = parseISO(dateStr);
-            if (!isValid(date)) return dateStr;
+            const date = parseAnyDate(dateStr);
+            if (!date || !isValid(date)) return dateStr;
 
             if (isToday(date)) return "Today";
             if (isYesterday(date)) return "Yesterday";
