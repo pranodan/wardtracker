@@ -13,8 +13,8 @@ import CalendarView from "./CalendarView";
 
 interface PatientListProps {
     patients: Patient[];
-    onUpdatePatient: (patient: Patient) => Promise<void>;
-    onDischargePatient: (patient: Patient) => void;
+    onUpdatePatient?: (patient: Patient) => Promise<void>;
+    onDischargePatient?: (patient: Patient) => void;
     onTransferPatient?: (patient: Patient, consultant: string) => void;
     consultants?: string[];
     onRemovePatient?: (patient: Patient) => void;
@@ -258,7 +258,7 @@ export default function PatientList({
                                 grouped={viewMode !== "grid"}
                                 onSaveLayout={async (updatedPatients) => {
                                     for (const p of updatedPatients) {
-                                        await onUpdatePatient(p);
+                                        if (onUpdatePatient) await onUpdatePatient(p);
                                     }
                                 }}
                                 groups={groups}
@@ -280,7 +280,7 @@ export default function PatientList({
                     <PatientDetailModal
                         patient={selectedPatient}
                         onClose={() => setSelectedPatient(null)}
-                        onSave={onUpdatePatient}
+                        onSave={onUpdatePatient || (async () => { })}
                         onDischarge={handleDischargeClick}
                         onTransfer={onTransferPatient}
                         consultants={consultants}
@@ -294,7 +294,7 @@ export default function PatientList({
                     patient={dischargePatient}
                     onClose={() => setShowDischargeForm(false)}
                     onConfirmDischarge={(data) => {
-                        onDischargePatient({ ...dischargePatient, ...data, status: "discharged" });
+                        if (onDischargePatient) onDischargePatient({ ...dischargePatient, ...data, status: "discharged" });
                         setShowDischargeForm(false);
                     }}
                 />
