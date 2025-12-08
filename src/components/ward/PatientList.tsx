@@ -29,6 +29,7 @@ interface PatientListProps {
     isCollapsed?: boolean;
     onToggleCollapse?: () => void;
     groups?: import("@/utils/bedGrouping").BedGroup[];
+    showConsultantInitials?: boolean;
 }
 
 export default function PatientList({
@@ -45,7 +46,8 @@ export default function PatientList({
     collapsible,
     isCollapsed: externalIsCollapsed,
     onToggleCollapse,
-    groupByDate
+    groupByDate,
+    showConsultantInitials
 }: PatientListProps) {
     const [searchQuery, setSearchQuery] = useState("");
     const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
@@ -249,6 +251,7 @@ export default function PatientList({
                             <CalendarView
                                 patients={filteredPatients}
                                 onPatientClick={handleCardClick}
+                                showConsultantInitials={showConsultantInitials}
                             />
                         ) : (
                             // Floor / Cards / Grid (re-using RoundMap for now as it supports grid layout)
@@ -262,6 +265,7 @@ export default function PatientList({
                                     }
                                 }}
                                 groups={groups}
+                                showConsultantInitials={showConsultantInitials}
                             />
                         )}
                     </motion.div>

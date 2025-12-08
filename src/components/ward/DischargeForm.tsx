@@ -31,10 +31,10 @@ export default function DischargeForm({ patient, onClose, onConfirmDischarge }: 
     const [isProcedureOpen, setIsProcedureOpen] = useState(false);
 
     const [formData, setFormData] = useState({
-        programYear: "",
+        programYear: patient.programYear || "", // Mapped from Patient Details
         programBlock: "",
         domain: "Skill", // Default as requested
-        level: "",
+        level: patient.level || "", // Mapped from Patient Details
         procedureName: "", // Intentionally empty, user must select
         procedureDescription: "",
         date: new Date().toISOString().split('T')[0],
@@ -42,9 +42,9 @@ export default function DischargeForm({ patient, onClose, onConfirmDischarge }: 
         patientName: patient.name || "",
         age: patient.ageGender?.split('/')[0]?.replace(/\D/g, '') || "",
         address: "",
-        history: "",
-        diagnosis: "", // Clinical Exam / Findings - Empty by default, not mapped from Diagnosis
-        investigation: "",
+        history: patient.history || "", // Mapped from Patient Details
+        diagnosis: patient.examination || "", // Clinical Exam / Findings - Mapped from 'examination'
+        investigation: patient.investigation || "", // Mapped from Patient Details
         provisionalDiagnosis: patient.diagnosis || "",
         finalDiagnosis: patient.diagnosis || "",
         management: (() => {

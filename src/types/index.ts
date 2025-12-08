@@ -13,11 +13,21 @@ export interface Patient {
     // Extended data (from Firebase or local state)
     diagnosis?: string;
     procedure?: string;
+    npoStatus?: string;
     dop?: string; // Date of Procedure
     surgeries?: { procedure: string; dop: string }[];
     plan?: string;
     tracking?: TrackingEntry[];
-    status?: "admitted" | "marked_for_discharge" | "discharged";
+    status?: "admitted" | "marked_for_discharge" | "discharged" | "elective";
+
+    // Clinical Data (for Discharge Form)
+    history?: string;
+    examination?: string; // Clinical Findings
+    investigation?: string;
+    programYear?: string;
+    programBlock?: string;
+    domain?: string;
+    level?: string;
 }
 
 export interface TrackingEntry {
@@ -25,6 +35,16 @@ export interface TrackingEntry {
     date: string;
     parameter: string;
     value: string;
+}
+
+export interface CaseReport {
+    id: string;
+    title: string;
+    diagnosis: string;
+    history: string;
+    examination: string;
+    investigation: string;
+    tags: string[];
 }
 
 

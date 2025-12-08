@@ -3,14 +3,15 @@
 import { Patient } from "@/types";
 import { motion } from "framer-motion";
 import { differenceInDays, isValid, compareDesc } from "date-fns";
-import { cn, parseAnyDate } from "@/lib/utils";
+import { cn, parseAnyDate, getInitials } from "@/lib/utils";
 
 interface PatientCardProps {
     patient: Patient;
     onClick: (patient: Patient) => void;
+    showConsultantInitials?: boolean;
 }
 
-export default function PatientCard({ patient, onClick }: PatientCardProps) {
+export default function PatientCard({ patient, onClick, showConsultantInitials }: PatientCardProps) {
     const hasDiagnosis = !!patient.diagnosis;
     const procedures: { text: string; date: Date }[] = [];
 
@@ -73,6 +74,11 @@ export default function PatientCard({ patient, onClick }: PatientCardProps) {
                         {patient.bedNo}
                     </div>
                 </div>
+                {showConsultantInitials && patient.consultant && (
+                    <div className="mb-2 text-[10px] font-bold text-gray-500 uppercase pl-[1px]">
+                        {getInitials(patient.consultant)}
+                    </div>
+                )}
                 <div className="mb-1">
                     <p className={`line-clamp-2 text-xs font-medium ${hasDiagnosis ? 'text-gray-300' : 'text-red-400 italic'}`}>
                         {patient.diagnosis || "No Diagnosis Recorded"}

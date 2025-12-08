@@ -13,9 +13,10 @@ interface RoundMapProps {
     onSaveLayout?: (patients: Patient[]) => void;
     grouped?: boolean;
     groups?: import("@/utils/bedGrouping").BedGroup[];
+    showConsultantInitials?: boolean;
 }
 
-export default function RoundMap({ patients, onPatientClick, onSaveLayout, grouped = true, groups = DEFAULT_BED_GROUPS }: RoundMapProps) {
+export default function RoundMap({ patients, onPatientClick, onSaveLayout, grouped = true, groups = DEFAULT_BED_GROUPS, showConsultantInitials }: RoundMapProps) {
     const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
 
     // Group patients
@@ -56,6 +57,7 @@ export default function RoundMap({ patients, onPatientClick, onSaveLayout, group
                         key={patient.id}
                         patient={patient}
                         onClick={onPatientClick}
+                        showConsultantInitials={showConsultantInitials}
                     />
                 ))}
             </div>
@@ -101,6 +103,7 @@ export default function RoundMap({ patients, onPatientClick, onSaveLayout, group
                                                 key={patient.id}
                                                 patient={patient}
                                                 onClick={onPatientClick}
+                                                showConsultantInitials={showConsultantInitials}
                                             />
                                         ))}
                                     </div>

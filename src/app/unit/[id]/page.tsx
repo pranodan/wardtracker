@@ -2,14 +2,17 @@
 
 import { usePatients } from "@/hooks/usePatients";
 import { UNITS, Patient } from "@/types";
+import { differenceInDays, parseISO, startOfDay } from "date-fns";
 import { useParams, useRouter } from "next/navigation";
 import { useState, useMemo } from "react";
 import PatientList from "@/components/ward/PatientList";
+import ElectiveTable from "@/components/ward/ElectiveTable";
 import PatientDetailModal from "@/components/ward/PatientDetailModal";
 import PatientSummaryModal from "@/components/ward/PatientSummaryModal";
+import ElectiveDetailModal from "@/components/ward/ElectiveDetailModal";
 import DischargeForm from "@/components/ward/DischargeForm";
 import { sortPatientsByBed } from "@/utils/bedGrouping";
-import { Users, Bed, List, Map, FileOutput, RefreshCcw } from "lucide-react";
+import { Users, Bed, List, Map, FileOutput, RefreshCcw, Home } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { db } from "@/lib/firebase";
 import { collection, addDoc, query, where, getDocs, deleteDoc, setDoc, doc } from "firebase/firestore";
@@ -23,7 +26,7 @@ export default function UnitPage() {
     const unitId = Number(params.id);
     const unit = UNITS.find((u) => u.id === unitId);
     const { patients, loading, refresh } = usePatients();
-    const [activeTab, setActiveTab] = useState<"unit" | "main" | "consultant">("unit");
+    const [activeTab, setActiveTab] = useState<"unit" | "main" | "consultant" | "elective">("unit");
     const [viewMode, setViewMode] = useState<ViewMode>("cards");
     const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
     const [dischargingPatient, setDischargingPatient] = useState<Patient | null>(null);
@@ -37,6 +40,9 @@ export default function UnitPage() {
     const unitTotalPatients = useMemo(() => {
         if (!unit) return 0;
         return patients.filter(p => {
+            // Filter out discharged and elective patients
+            if (p.status === "discharged" || p.status === "elective") return false;
+
             const patientConsultant = p.consultant?.toLowerCase() || "";
             return unit.consultants.some(c => patientConsultant.includes(c.toLowerCase()));
         }).length;
@@ -46,8 +52,62 @@ export default function UnitPage() {
     const displayedPatients = useMemo(() => {
         if (!unit) return [];
 
-        // Filter out discharged patients
-        let filtered = patients.filter(p => p.status !== "discharged");
+        // Filter out discharged and elective patients (handled separately in elective tab)
+        let filtered = patients.filter(p => p.status !== "discharged" && p.status !== "elective");
+
+        if (activeTab === "elective") {
+            // Elective List Sorting: 
+            // 1. Filter: Date >= Today - 7
+            // 2. Sort: Future (Asc) -> Today -> Past (Desc)
+
+            const today = startOfDay(new Date());
+
+            // Use 'patients' directly since 'filtered' excludes 'elective'
+            return patients.filter(p => p.status === "elective").filter(p => {
+                if (!p.ipDate) return false;
+                let d = parseISO(p.ipDate);
+                if (isNaN(d.getTime())) {
+                    d = new Date(p.ipDate); // Try standard constructor
+                }
+                if (isNaN(d.getTime())) return false; // Skip invalid dates
+
+                const diff = differenceInDays(d, today);
+                // Allow Future (diff > 0), Today (diff == 0), Past up to 7 days (diff >= -7)
+                return diff >= -7;
+            }).sort((a, b) => {
+                const dateA = a.ipDate ? parseISO(a.ipDate) : new Date(0);
+                const dateB = b.ipDate ? parseISO(b.ipDate) : new Date(0);
+
+                const diffA = differenceInDays(dateA, today);
+                const diffB = differenceInDays(dateB, today);
+
+                const isAFuture = diffA > 0;
+                const isBFuture = diffB > 0;
+                const isAToday = diffA === 0;
+                const isBToday = diffB === 0;
+                const isAPast = diffA < 0;
+                const isBPast = diffB < 0;
+
+                // Priority 1: Future (Ascending: Tomorrow, T+2...)
+                if (isAFuture && !isBFuture) return -1;
+                if (!isAFuture && isBFuture) return 1;
+                if (isAFuture && isBFuture) return diffA - diffB; // Smaller diff (closer to today) first? No, "Tomorrow, Tomorrow+1". Tomorrow is diff 1. T+2 is diff 2. So Ascending diff.
+
+                // Priority 2: Today
+                if (isAToday && !isBToday) return -1;
+                if (!isAToday && isBToday) return 1;
+                if (isAToday && isBToday) return 0;
+
+                // Priority 3: Past (Descending: Today-1, Today-2...)
+                // We want Today-1 (diff -1) before Today-7 (diff -7).
+                // diffA is -1, diffB is -7.
+                // -1 > -7 ? Yes. If we sort Ascending (-7 ... -1) it puts Older first.
+                // We want Descending (-1 ... -7).
+                if (isAPast && isBPast) return diffB - diffA;
+
+                return 0;
+            });
+        }
 
         if (activeTab === "unit" || activeTab === "consultant") {
             filtered = filtered.filter((p) => {
@@ -185,6 +245,8 @@ export default function UnitPage() {
 
     if (!unit) return <div className="p-8 text-white">Unit not found</div>;
 
+    const isSportsUnit = unit.id === 5;
+
     return (
         <main className="min-h-screen bg-background pb-20">
             {/* Header */}
@@ -194,6 +256,13 @@ export default function UnitPage() {
                     <p className="text-xs text-gray-400">{unitTotalPatients} Patients Admitted</p>
                 </div>
                 <div className="flex items-center space-x-2">
+                    <button
+                        onClick={() => router.push("/")}
+                        className="flex items-center space-x-2 rounded-full bg-white/5 px-3 py-1.5 text-xs font-medium text-gray-300 hover:bg-white/10 hover:text-white"
+                    >
+                        <Home size={14} />
+                        <span className="hidden sm:inline">Home</span>
+                    </button>
                     <ViewSwitcher currentView={viewMode} onViewChange={setViewMode} />
                     <button
                         onClick={refresh}
@@ -244,6 +313,13 @@ export default function UnitPage() {
                                 consultants={unit.consultants}
                                 onRemovePatient={handleRemove}
                                 groups={groups}
+                                showConsultantInitials={true}
+                            />
+                        )}
+                        {activeTab === "elective" && (
+                            <ElectiveTable
+                                patients={displayedPatients}
+                                onPatientClick={handlePatientClick}
                             />
                         )}
                         {activeTab === "main" && (
@@ -262,6 +338,7 @@ export default function UnitPage() {
                                 consultants={unit.consultants}
                                 onRemovePatient={handleRemove}
                                 groups={groups}
+                                showConsultantInitials={true}
                             />
                         )}
                         {activeTab === "consultant" && (
@@ -316,7 +393,12 @@ export default function UnitPage() {
             </div>
 
             {selectedPatient && (
-                activeTab === "main" ? (
+                activeTab === "elective" ? (
+                    <ElectiveDetailModal
+                        patient={selectedPatient}
+                        onClose={() => setSelectedPatient(null)}
+                    />
+                ) : activeTab === "main" ? (
                     <PatientSummaryModal
                         patient={selectedPatient}
                         onClose={() => setSelectedPatient(null)}
@@ -355,6 +437,14 @@ export default function UnitPage() {
                         icon={<Users size={20} />}
                         label="Unit"
                     />
+                    {isSportsUnit && (
+                        <NavButton
+                            active={activeTab === "elective"}
+                            onClick={() => setActiveTab("elective")}
+                            icon={<List size={20} />}
+                            label="Elective"
+                        />
+                    )}
                     <NavButton
                         active={activeTab === "main"}
                         onClick={() => setActiveTab("main")}

@@ -1,6 +1,6 @@
 import { google } from "googleapis";
 
-export async function getSheetData() {
+export async function getSheetData(range: string = "Scraped!A:I") {
     try {
         const auth = new google.auth.GoogleAuth({
             credentials: {
@@ -13,7 +13,7 @@ export async function getSheetData() {
         const sheets = google.sheets({ version: "v4", auth });
         const response = await sheets.spreadsheets.values.get({
             spreadsheetId: process.env.GOOGLE_SHEETS_SPREADSHEET_ID,
-            range: "Scraped!A:I", // Data is in Scraped sheet, columns A to I
+            range: range,
         });
 
         const rows = response.data.values;

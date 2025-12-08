@@ -1,16 +1,18 @@
 "use client";
 
 import { Patient } from "@/types";
-import { X, Save, Activity, ClipboardList, Wand2, AlertTriangle, FileOutput, Plus, Trash2, Calendar as CalendarIcon, ChevronUp, ChevronDown, Loader2 } from "lucide-react";
+import { X, Save, Activity, ClipboardList, BookOpen, AlertTriangle, FileOutput, Plus, Trash2, Calendar as CalendarIcon, ChevronUp, ChevronDown, Loader2, FileText, ArrowRightLeft } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useState, useEffect } from "react";
 import { cn } from "@/lib/utils";
-import TrackingTable from "@/components/ward/TrackingTable";
+import TrackingTable from "./TrackingTable";
+import CaseReportSelector from "./CaseReportSelector";
+import { CaseReport } from "@/types";
 
 interface PatientDetailModalProps {
-    patient: Patient | null;
+    patient: Patient;
     onClose: () => void;
-    onSave: (updatedPatient: Patient) => Promise<void>;
+    onSave: (updatedPatient: Patient) => void;
     onDischarge?: (patient: Patient) => void;
     readOnly?: boolean;
     onTransfer?: (patient: Patient, consultant: string) => void;
@@ -19,93 +21,168 @@ interface PatientDetailModalProps {
 }
 
 const PROCEDURE_SUGGESTIONS = [
-    "ORIF", "Casting", "External Fixation", "IM Nailing", "Plating", "Pinning",
-    "ACL Reconstruction", "Meniscectomy", "Total Hip Replacement", "Total Knee Replacement",
-    "Discectomy", "Laminectomy", "Spinal Fusion", "Debridement", "Dressing", "Amputation", "CR"
+    "Debridement",
+    "Split Skin Graft",
+    "Amputation",
+    "Fasciotomy",
+    "K-Wire Fixation",
+    "External Fixation",
+    "Plating",
+    "Nailing",
+    "Tendon Repair",
+    "Flap Cover"
 ];
 
 export default function PatientDetailModal({ patient, onClose, onSave, onDischarge, readOnly, onTransfer, consultants, onRemove }: PatientDetailModalProps) {
-    const [activeTab, setActiveTab] = useState<"clinical" | "tracking">("clinical");
+    const [activeTab, setActiveTab] = useState<"clinical" | "clinical_data" | "tracking">("clinical");
     const [formData, setFormData] = useState<Partial<Patient>>(patient || {});
     const [isDirty, setIsDirty] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
 
-    // New Surgery State
     const [newSurgery, setNewSurgery] = useState({ procedure: "", dop: "" });
     const [isAddingSurgery, setIsAddingSurgery] = useState(false);
+    const [isTransferring, setIsTransferring] = useState(false);
+
+    // Knowledge Base State
+    const [isSearchOpen, setIsSearchOpen] = useState(false);
 
     // Sync state with prop changes
     useEffect(() => {
         if (patient) {
-            setFormData(prev => ({ ...prev, ...patient }));
+            setFormData(patient);
         }
     }, [patient]);
 
-    if (!patient) return null;
-
-    const handleSave = async () => {
-        // Validation: Procedure Date is required if Procedure Name is entered
-        if (formData.procedure && !formData.dop) {
-            alert("Please enter the Date of Procedure (DOP) for the primary procedure.");
-            return;
-        }
-
-        if (formData.surgeries && formData.surgeries.some(s => s.procedure && !s.dop)) {
-            alert("Please enter the Date of Procedure (DOP) for all added surgeries.");
-            return;
-        }
-
-        setIsSaving(true);
-        try {
-            // Ensure we pass the full patient object merged with updates
-            const updatedPatient = { ...patient, ...formData } as Patient;
-            await onSave(updatedPatient);
-            setIsDirty(false);
-            onClose();
-        } catch (error) {
-            console.error("Failed to save patient:", error);
-        } finally {
-            setIsSaving(false);
-        }
-    };
-
     const updateField = (field: keyof Patient, value: any) => {
-        setFormData(prev => ({ ...prev, [field]: value }));
+        setFormData((prev) => ({ ...prev, [field]: value }));
         setIsDirty(true);
     };
 
-    // Helper to append procedure from chips
-    const appendProcedure = (chip: string, isPrimary: boolean = true) => {
-        if (isPrimary) {
-            const current = formData.procedure || "";
-            const newValue = current ? `${current} + ${chip}` : chip;
-            updateField("procedure", newValue);
-        } else {
-            const current = newSurgery.procedure || "";
-            const newValue = current ? `${current} + ${chip}` : chip;
-            setNewSurgery(prev => ({ ...prev, procedure: newValue }));
-        }
+    const handleSave = async () => {
+        setIsSaving(true);
+        // Simulate network delay
+        await new Promise(resolve => setTimeout(resolve, 600));
+        onSave({ ...patient, ...formData } as Patient);
+        setIsSaving(false);
+        setIsDirty(false);
     };
 
     const toggleDischargeMark = () => {
         const newStatus = formData.status === "marked_for_discharge" ? "admitted" : "marked_for_discharge";
-        setFormData({ ...formData, status: newStatus });
-        setIsDirty(true);
+        updateField("status", newStatus);
     };
 
     const addSurgery = () => {
         if (!newSurgery.procedure) return;
         const currentSurgeries = formData.surgeries || [];
-        // Create new array to ensure state update triggers
-        const updatedSurgeries = [...currentSurgeries, newSurgery];
-        updateField("surgeries", updatedSurgeries);
+        updateField("surgeries", [...currentSurgeries, newSurgery]);
         setNewSurgery({ procedure: "", dop: "" });
         setIsAddingSurgery(false);
+    };
+
+    const appendProcedure = (proc: string, isPrimary: boolean) => {
+        if (isPrimary) {
+            updateField("procedure", formData.procedure ? `${formData.procedure}, ${proc}` : proc);
+        } else {
+            setNewSurgery(prev => ({ ...prev, procedure: prev.procedure ? `${prev.procedure}, ${proc}` : proc }));
+        }
     };
 
     const removeSurgery = (index: number) => {
         const currentSurgeries = formData.surgeries || [];
         updateField("surgeries", currentSurgeries.filter((_, i) => i !== index));
+    };
+
+    const processTemplate = (text: string, patientData: Patient) => {
+        let processed = text;
+        const currentDiag = (patientData.diagnosis || "").toLowerCase();
+
+        // 1. Extract Age and Gender
+        const ageMatch = patientData.ageGender?.match(/(\d+)/);
+        const age = ageMatch ? ageMatch[1] : "___";
+
+        let gender = "patient";
+        let heShe = "he/she";
+        let hisHer = "his/her";
+        const genderLower = (patientData.ageGender || "").toLowerCase();
+        if (genderLower.includes("f") || genderLower.includes("w") || genderLower.includes("female")) {
+            gender = "female";
+            heShe = "she";
+            hisHer = "her";
+        } else if (genderLower.includes("m") || genderLower.includes("male")) {
+            gender = "male";
+            heShe = "he";
+            hisHer = "his";
+        }
+
+        // 2. Infer Side
+        let side = "___";
+        let sideLc = "___";
+
+        if (currentDiag.includes("bilateral") || currentDiag.includes(" b/l")) {
+            side = "Bilateral";
+            sideLc = "bilateral";
+        } else {
+            const match = currentDiag.match(/\b(right|left|rt|lt)\b/i);
+            if (match) {
+                const found = match[1].toLowerCase();
+                if (found === "right" || found === "rt") {
+                    side = "Right";
+                    sideLc = "right";
+                } else {
+                    side = "Left";
+                    sideLc = "left";
+                }
+            }
+        }
+
+        // 3. Replace Placeholders
+        processed = processed.replace(/{{AGE}}/g, age);
+        processed = processed.replace(/{{GENDER}}/g, gender);
+        processed = processed.replace(/{{SIDE}}/g, side);
+        processed = processed.replace(/{{SIDE_LC}}/g, sideLc);
+        processed = processed.replace(/{{HE_SHE}}/g, heShe);
+        processed = processed.replace(/{{HIS_HER}}/g, hisHer);
+
+        return processed;
+    };
+
+    const generateSmartQuery = (diagnosis?: string) => {
+        if (!diagnosis) return "";
+        const stopWords = ["fracture", "of", "the", "left", "right", "bilateral", "side", "rt", "lt", "grade", "type", "with", "and", "severe", "mild", "old", "new", "union", "non-union", "malunion", "closed", "open", "for", "surgery", "post", "op", "status"];
+
+        return diagnosis.split(" ")
+            .map(w => w.replace(/[(),.]/g, "").trim())
+            .filter(w => w.length > 2 && !stopWords.includes(w.toLowerCase()))
+            .join(" ");
+    };
+
+    const handleReportSelect = (report: CaseReport) => {
+        const currentData = { ...patient, ...formData };
+        if (report.history) updateField("history", processTemplate(report.history, currentData as Patient));
+        if (report.examination) updateField("examination", processTemplate(report.examination, currentData as Patient));
+        if (report.investigation) updateField("investigation", processTemplate(report.investigation, currentData as Patient));
+
+        setIsSearchOpen(false);
+    };
+    useEffect(() => {
+        // Load defaults if empty
+        if (!formData.programYear) updateField("programYear", localStorage.getItem("last_programYear") || "");
+        if (!formData.programBlock) updateField("programBlock", localStorage.getItem("last_programBlock") || "");
+        if (!formData.domain) updateField("domain", localStorage.getItem("last_domain") || "");
+        if (!formData.level) updateField("level", localStorage.getItem("last_level") || "");
+    }, []); // Run once on mount (when modal opens)
+
+    // Save on change
+    useEffect(() => { if (formData.programYear) localStorage.setItem("last_programYear", formData.programYear); }, [formData.programYear]);
+    useEffect(() => { if (formData.programBlock) localStorage.setItem("last_programBlock", formData.programBlock); }, [formData.programBlock]);
+    useEffect(() => { if (formData.domain) localStorage.setItem("last_domain", formData.domain); }, [formData.domain]);
+    useEffect(() => { if (formData.level) localStorage.setItem("last_level", formData.level); }, [formData.level]);
+
+
+    const handleTransferClick = (c: string) => {
+        if (onTransfer) onTransfer(patient, c);
+        setIsTransferring(false);
     };
 
     return (
@@ -143,7 +220,8 @@ export default function PatientDetailModal({ patient, onClose, onSave, onDischar
 
                         {/* Tabs */}
                         <div className="mt-6 flex space-x-4 border-b border-white/10 pb-2">
-                            <TabButton active={activeTab === "clinical"} onClick={() => setActiveTab("clinical")} icon={<ClipboardList size={16} />} label="Clinical" />
+                            <TabButton active={activeTab === "clinical"} onClick={() => setActiveTab("clinical")} icon={<ClipboardList size={16} />} label="Overview" />
+                            <TabButton active={activeTab === "clinical_data"} onClick={() => setActiveTab("clinical_data")} icon={<FileText size={16} />} label="Clinical Data" />
                             <TabButton active={activeTab === "tracking"} onClick={() => setActiveTab("tracking")} icon={<Activity size={16} />} label="Tracking" />
                         </div>
                     </div>
@@ -264,6 +342,29 @@ export default function PatientDetailModal({ patient, onClose, onSave, onDischar
                                 </div>
 
                                 <InputGroup label="Plan" value={formData.plan} onChange={(v: string) => updateField("plan", v)} textarea disabled={readOnly} />
+                                <InputGroup label="NPO / Remarks" value={formData.npoStatus} onChange={(v: string) => updateField("npoStatus", v)} textarea disabled={readOnly} />
+                            </div>
+                        ) : activeTab === "clinical_data" ? (
+                            <div className="space-y-6">
+                                <div className="flex items-center justify-between">
+                                    <h3 className="text-sm font-medium text-gray-400">Clinical Evaluation</h3>
+                                    <button
+                                        onClick={() => setIsSearchOpen(true)}
+                                        className="flex items-center space-x-2 rounded-lg bg-green-500/10 px-3 py-1.5 text-xs font-medium text-green-500 hover:bg-green-500/20"
+                                    >
+                                        <BookOpen size={12} />
+                                        <span>Smart Search</span>
+                                    </button>
+                                </div>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <SelectField label="Program Year" value={formData.programYear} onChange={(v) => updateField("programYear", v)} options={["First", "Second", "Third"]} disabled={readOnly} />
+                                    <SelectField label="Program Block" value={formData.programBlock} onChange={(v) => updateField("programBlock", v)} options={["I", "II", "III", "IV", "V", "VI"]} disabled={readOnly} />
+                                    <SelectField label="Domain" value={formData.domain} onChange={(v) => updateField("domain", v)} options={["Knowledge", "Skill", "Attitude"]} disabled={readOnly} />
+                                    <SelectField label="Level" value={formData.level} onChange={(v) => updateField("level", v)} options={["I", "II", "III", "IV"]} disabled={readOnly} />
+                                </div>
+                                <InputGroup label="History of Present Illness" value={formData.history} onChange={(v) => updateField("history", v)} textarea disabled={readOnly} />
+                                <InputGroup label="Clinical Examination" value={formData.examination} onChange={(v) => updateField("examination", v)} textarea disabled={readOnly} />
+                                <InputGroup label="Investigation" value={formData.investigation} onChange={(v) => updateField("investigation", v)} textarea disabled={readOnly} />
                             </div>
                         ) : (
                             <div className="space-y-4">
@@ -279,8 +380,57 @@ export default function PatientDetailModal({ patient, onClose, onSave, onDischar
                     <div className="flex-none border-t border-white/10 bg-[#0a0a0a] p-4">
                         <div className="flex items-center justify-between">
                             <div className="flex space-x-2">
+                                {/* AI Button */}
+                                <div className="relative">
+                                    <button
+                                        onClick={() => setIsSearchOpen(true)}
+                                        className={cn(
+                                            "rounded-lg p-2 transition-colors",
+                                            isSearchOpen ? "bg-green-500/20 text-green-400" : "bg-green-500/10 text-green-400 hover:bg-green-500/20"
+                                        )}
+                                        title="Search Case Reports (Knowledge Base)"
+                                    >
+                                        <BookOpen size={20} />
+                                    </button>
+                                </div>
+
                                 {!readOnly && (
                                     <>
+                                        {/* Transfer Button */}
+                                        {onTransfer && consultants && (
+                                            <div className="relative">
+                                                <button
+                                                    onClick={() => setIsTransferring(!isTransferring)}
+                                                    title="Transfer Patient"
+                                                    className={cn(
+                                                        "rounded-lg p-2 transition-colors",
+                                                        isTransferring ? "bg-blue-500/20 text-blue-400" : "bg-white/5 text-gray-400 hover:bg-white/10 hover:text-white"
+                                                    )}
+                                                >
+                                                    <ArrowRightLeft size={20} />
+                                                </button>
+                                                {isTransferring && (
+                                                    <div className="absolute bottom-full left-0 mb-2 w-56 rounded-lg border border-white/10 bg-[#1a1a1a] p-2 shadow-xl">
+                                                        <div className="mb-2 text-xs font-medium text-gray-400">Transfer to:</div>
+                                                        <div className="max-h-48 overflow-y-auto space-y-1">
+                                                            {consultants.map(c => (
+                                                                <button
+                                                                    key={c}
+                                                                    onClick={() => {
+                                                                        onTransfer(patient, c);
+                                                                        setIsTransferring(false);
+                                                                    }}
+                                                                    className="w-full rounded px-2 py-1 text-left text-xs text-gray-300 hover:bg-white/5 hover:text-white truncate"
+                                                                >
+                                                                    {c}
+                                                                </button>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        )}
+
                                         <button
                                             onClick={toggleDischargeMark}
                                             title={formData.status === "marked_for_discharge" ? "Unmark Discharge" : "Mark for Discharge"}
@@ -332,6 +482,38 @@ export default function PatientDetailModal({ patient, onClose, onSave, onDischar
                         </div>
                     </div>
                 </motion.div>
+
+                {/* AI Result Modal */}
+                <AnimatePresence>
+                    {/* Smart Search Modal */}
+                    <AnimatePresence>
+                        {isSearchOpen && (
+                            <div className="absolute inset-0 z-[60] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+                                <motion.div
+                                    initial={{ opacity: 0, scale: 0.9 }}
+                                    animate={{ opacity: 1, scale: 1 }}
+                                    exit={{ opacity: 0, scale: 0.9 }}
+                                    className="glass-card w-full max-w-2xl h-[70vh] rounded-2xl bg-[#0a0a0a] border border-white/10 flex flex-col"
+                                >
+                                    <div className="flex items-center justify-between border-b border-white/10 p-4">
+                                        <h3 className="text-lg font-bold text-white flex items-center space-x-2">
+                                            <BookOpen size={18} className="text-green-400" />
+                                            <span>Knowledge Base</span>
+                                        </h3>
+                                        <button onClick={() => setIsSearchOpen(false)} className="text-gray-400 hover:text-white"><X size={20} /></button>
+                                    </div>
+                                    <div className="p-4 overflow-hidden flex-1">
+                                        <CaseReportSelector
+                                            onSelect={handleReportSelect}
+                                            currentDiagnosis={generateSmartQuery(formData.diagnosis)}
+                                            onClose={() => setIsSearchOpen(false)}
+                                        />
+                                    </div>
+                                </motion.div>
+                            </div>
+                        )}
+                    </AnimatePresence>
+                </AnimatePresence>
             </div>
         </AnimatePresence>
     );
@@ -356,6 +538,34 @@ function TabButton({ active, onClick, icon, label }: TabButtonProps) {
             {icon}
             <span className="text-sm font-medium uppercase">{label}</span>
         </button>
+    );
+}
+
+
+interface SelectFieldProps {
+    label: string;
+    value?: string;
+    onChange: (value: string) => void;
+    options: string[];
+    disabled?: boolean;
+}
+
+function SelectField({ label, value, onChange, options, disabled }: SelectFieldProps) {
+    return (
+        <div>
+            <label className="mb-1 block text-xs font-medium text-gray-400 uppercase">{label}</label>
+            <select
+                value={value || ""}
+                onChange={(e) => onChange(e.target.value)}
+                className="w-full rounded-lg border border-white/10 bg-white/5 p-3 text-sm text-white outline-none focus:border-primary disabled:opacity-50 [&>option]:bg-[#0a0a0a] [&>option]:text-white"
+                disabled={disabled}
+            >
+                <option value="" className="bg-[#0a0a0a] text-white">-- Select --</option>
+                {options.map((opt: string) => (
+                    <option key={opt} value={opt} className="bg-[#0a0a0a] text-white">{opt}</option>
+                ))}
+            </select>
+        </div>
     );
 }
 

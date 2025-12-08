@@ -11,9 +11,10 @@ import { ChevronDown, ChevronRight } from "lucide-react";
 interface CalendarViewProps {
     patients: Patient[];
     onPatientClick: (patient: Patient) => void;
+    showConsultantInitials?: boolean;
 }
 
-export default function CalendarView({ patients, onPatientClick }: CalendarViewProps) {
+export default function CalendarView({ patients, onPatientClick, showConsultantInitials }: CalendarViewProps) {
     const [collapsedDates, setCollapsedDates] = useState<Record<string, boolean>>({});
 
     const toggleDate = (dateStr: string) => {
@@ -106,7 +107,12 @@ export default function CalendarView({ patients, onPatientClick }: CalendarViewP
                                 >
                                     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 pt-2">
                                         {groupPatients.map(patient => (
-                                            <PatientCard key={patient.id} patient={patient} onClick={onPatientClick} />
+                                            <PatientCard
+                                                key={patient.id}
+                                                patient={patient}
+                                                onClick={onPatientClick}
+                                                showConsultantInitials={showConsultantInitials}
+                                            />
                                         ))}
                                     </div>
                                 </motion.div>
