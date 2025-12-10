@@ -35,7 +35,7 @@ export function parseAnyDate(dateStr: string | undefined): Date | null {
 export function getInitials(name: string | undefined): string {
     if (!name) return "";
     // Remove "Dr.", "Prof." etc, split by space, take first char of each valid word
-    const cleanName = name.replace(/^(Dr\.|Prof\.|Mr\.|Mrs\.|Ms\.)\s*/i, "").replace(/^(Dr|Prof|Mr|Mrs|Ms)\s+/i, "");
+    const cleanName = name.replace(/^(Dr\.|Prof\.|Prof\. Dr\.|Mr\.|Mrs\.|Ms\.)\s*/i, "").replace(/^(Dr|Prof|Prof\. Dr|Mr|Mrs|Ms)\s+/i, "");
     const initials = cleanName
         .split(' ')
         .filter(part => part.length > 0 && /^[a-zA-Z]/.test(part))

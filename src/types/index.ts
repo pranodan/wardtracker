@@ -19,6 +19,7 @@ export interface Patient {
     plan?: string;
     tracking?: TrackingEntry[];
     status?: "admitted" | "marked_for_discharge" | "discharged" | "elective";
+    isGhost?: boolean; // True if patient is removed from Sheet but exists in Unit
 
     // Clinical Data (for Discharge Form)
     history?: string;
@@ -41,10 +42,12 @@ export interface CaseReport {
     id: string;
     title: string;
     diagnosis: string;
+    procedure?: string;
     history: string;
     examination: string;
     investigation: string;
     tags: string[];
+    isSystem?: boolean;
 }
 
 
@@ -64,7 +67,9 @@ export const UNITS = [
             "Dr. Ansul Rajbhandari",
             "Dr. Rajendra Aryal",
             "Dr. Birendra Bahadur Chand",
-            "Dr. Nitesh Raj Pandey"
+            "Dr. Nitesh Raj Pandey",
+            "Dr. Orthopaedic Unit I",
+            "Dr. Orthopaedic Unit (I) / TR"
         ]
     },
     {
@@ -74,7 +79,9 @@ export const UNITS = [
             "Dr. Babu Kaji Shrestha",
             "Dr. Ram Krishna Barakoti",
             "Dr. Rajesh Kumar Chaudhary",
-            "Dr. Deepak Kaucha"
+            "Dr. Deepak Kaucha",
+            "Dr. Orthopaedic Unit II",
+            "Spine Unit"
         ]
     },
     {
@@ -94,7 +101,8 @@ export const UNITS = [
             "Dr. Nagmani Singh",
             "Dr. Bibek Basukala",
             "Dr. Rohit Bista",
-            "Dr. Rajiv Sharma"
+            "Dr. Rajiv Sharma",
+            "Sports Injury Unit"
         ]
     },
     {

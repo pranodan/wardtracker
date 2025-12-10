@@ -96,14 +96,23 @@ export function usePatients() {
             if (patientEdits[p.hospitalNo]) {
                 const edit = patientEdits[p.hospitalNo];
 
-                // Only merge fields that are NOT errors
+                // Fields that ALWAYS come from Sheet (unless missing in Sheet)
+                const LOCKED_FIELDS = ["bedNo", "name", "ageGender", "consultant", "ipDate", "hospitalNo", "procedure"];
+
+                // Only merge fields that are NOT errors AND NOT locked
                 const cleanEdit: any = {};
                 Object.keys(edit).forEach(key => {
                     const val = edit[key];
                     // Check if value is a "Bad Spreadsheet Value"
                     const isBad = typeof val === "string" && (val.includes("#NAME?") || val.includes("#REF!") || val.includes("#VALUE!") || val.includes("#N/A"));
 
-                    if (!isBad) {
+                    // Check if we should ignore this edit because Sheet has authority
+                    // We only ignore the edit if the Sheet actually provided a value (which it did, because 'p' comes from sheetData)
+                    // Note: If you want Sheet to ALWAYS win even if empty, remove the check.
+                    // Here we let Sheet win.
+                    const isLocked = LOCKED_FIELDS.includes(key);
+
+                    if (!isBad && !isLocked) {
                         cleanEdit[key] = val;
                     }
                 });
@@ -119,29 +128,36 @@ export function usePatients() {
             return patient;
         });
 
-        // 5. Handle "Ghost" Patients (In transfers but not in Sheet)
+        // 5. Handle "Ghost" Patients (In transfers OR edits but not in Sheet)
         const sheetIds = new Set(sheetData.map(p => p.hospitalNo));
-        const ghostPatients: Patient[] = Object.keys(transfers).filter(id => !sheetIds.has(id)).map(id => {
+        const allTrackedIds = new Set([...Object.keys(transfers), ...Object.keys(patientEdits)]);
+
+        const ghostPatients: Patient[] = Array.from(allTrackedIds).filter(id => !sheetIds.has(id)).map(id => {
             const savedData = patientEdits[id] || {};
-            let patient = {
+            const transferData = transfers[id];
+
+            // If we have neither saved data nor transfer data, we can't reconstruct the patient
+            // (This shouldn't happen given the key union, but for safety)
+            if (!savedData && !transferData) return null;
+
+            // Determine Consultant: Transfer > Saved > "Unknown"
+            // If they have NO consultant, they won't show in any Unit list anyway, but we should create the object.
+            const persistentConsultant = transferData?.consultant || savedData.consultant || "";
+
+            return {
                 id: id,
                 hospitalNo: id,
-                name: savedData.name || "Unknown Patient (Transferred)",
-                ageGender: savedData.ageGender || "N/A",
-                bedNo: savedData.bedNo || "N/A",
-                ipDate: savedData.ipDate || "Unknown",
-                consultant: transfers[id].consultant,
+                // Spread saved data FIRST
                 ...savedData,
-                status: savedData.status || "admitted"
+                name: savedData.name || "Unknown Patient (Left Census)",
+                ageGender: savedData.ageGender || "N/A",
+                bedNo: "", // Ghost patients have no bed in the Census
+                ipDate: savedData.ipDate || "Unknown",
+                consultant: persistentConsultant,
+                status: savedData.status || "admitted",
+                isGhost: true // Flag for UI
             } as Patient;
-
-            // Sanitize Ghosts
-            patient.ipDate = sanitize(patient.ipDate);
-            patient.name = sanitize(patient.name);
-            patient.bedNo = sanitize(patient.bedNo);
-
-            return patient;
-        });
+        }).filter(Boolean) as Patient[];
 
         const finalData = [...mergedData, ...ghostPatients];
         setPatients(finalData);

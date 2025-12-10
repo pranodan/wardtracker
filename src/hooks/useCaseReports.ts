@@ -194,7 +194,10 @@ export function useCaseReports() {
         // Initialize with Seed Data
         // Strategy: Always merge SEED_DATA with stored custom reports to ensure updates to SEED_DATA are seen.
         const stored = localStorage.getItem("ward_case_reports");
-        let allReports = [...SEED_DATA];
+
+        // Ensure SEED_DATA has isSystem: true
+        const systemReports = SEED_DATA.map(r => ({ ...r, isSystem: true }));
+        let allReports: CaseReport[] = [...systemReports];
 
         if (stored) {
             try {
@@ -203,8 +206,8 @@ export function useCaseReports() {
                 const seedIds = new Set(SEED_DATA.map(r => r.id));
                 const customReports = storedReports.filter(r => !seedIds.has(r.id));
 
-                // Combine seed + custom
-                allReports = [...SEED_DATA, ...customReports];
+                // Combine system + custom
+                allReports = [...systemReports, ...customReports];
             } catch (e) {
                 console.error("Failed to parse stored reports", e);
             }
@@ -226,6 +229,12 @@ export function useCaseReports() {
         localStorage.setItem("ward_case_reports", JSON.stringify(updated));
     };
 
+    const updateReport = (report: CaseReport) => {
+        const updated = reports.map(r => r.id === report.id ? report : r);
+        setReports(updated);
+        localStorage.setItem("ward_case_reports", JSON.stringify(updated));
+    };
+
     const searchReports = (query: string): CaseReport[] => {
         if (!query) return [];
         const lowerQ = query.toLowerCase();
@@ -236,5 +245,5 @@ export function useCaseReports() {
         );
     };
 
-    return { reports, addReport, deleteReport, searchReports };
+    return { reports, addReport, updateReport, deleteReport, searchReports };
 }

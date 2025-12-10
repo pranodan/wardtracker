@@ -61,9 +61,12 @@ export default function PatientCard({ patient, onClick, showConsultantInitials }
         <motion.div
             // layout
             onClick={() => onClick(patient)}
-            className="group relative cursor-pointer overflow-hidden rounded-xl border border-white/5 bg-[#121212] p-4 shadow-lg transition-colors hover:border-primary/30 hover:bg-[#1a1a1a]"
+            className={cn(
+                "group relative cursor-pointer overflow-hidden rounded-xl border border-white/5 bg-[#121212] p-4 shadow-lg transition-colors hover:border-primary/30 hover:bg-[#1a1a1a]",
+                patient.isGhost && "animate-pulse border-red-500/50 hover:border-red-500"
+            )}
         >
-            <div className={`absolute left-0 top-0 h-full w-1 ${hasDiagnosis ? 'bg-primary' : 'bg-red-500'}`} />
+            <div className={`absolute left-0 top-0 h-full w-1 ${patient.isGhost ? 'bg-red-600' : hasDiagnosis ? 'bg-primary' : 'bg-red-500'}`} />
             <div className="pl-3">
                 <div className="mb-2 flex items-start justify-between">
                     <div className="flex items-baseline space-x-2">

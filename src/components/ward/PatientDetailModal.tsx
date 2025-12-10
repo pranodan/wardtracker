@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils";
 import TrackingTable from "./TrackingTable";
 import CaseReportSelector from "./CaseReportSelector";
 import { CaseReport } from "@/types";
+import { useCaseReports } from "@/hooks/useCaseReports";
 
 interface PatientDetailModalProps {
     patient: Patient;
@@ -22,15 +23,20 @@ interface PatientDetailModalProps {
 
 const PROCEDURE_SUGGESTIONS = [
     "Debridement",
-    "Split Skin Graft",
+    "Closed Reduction",
+    "IMIL Nailing",
+    "ORIF",
+    "Plating",
+    "Percutaneous pinning",
+    "STSG",
+    "FTSG",
     "Amputation",
     "Fasciotomy",
-    "K-Wire Fixation",
-    "External Fixation",
-    "Plating",
-    "Nailing",
+    "External Fixator application",
     "Tendon Repair",
-    "Flap Cover"
+    "Flap Coverage",
+    "Reimplantation",
+    "Tendon Transfer"
 ];
 
 export default function PatientDetailModal({ patient, onClose, onSave, onDischarge, readOnly, onTransfer, consultants, onRemove }: PatientDetailModalProps) {
@@ -45,6 +51,7 @@ export default function PatientDetailModal({ patient, onClose, onSave, onDischar
 
     // Knowledge Base State
     const [isSearchOpen, setIsSearchOpen] = useState(false);
+    const { addReport } = useCaseReports();
 
     // Sync state with prop changes
     useEffect(() => {
@@ -162,8 +169,29 @@ export default function PatientDetailModal({ patient, onClose, onSave, onDischar
         if (report.history) updateField("history", processTemplate(report.history, currentData as Patient));
         if (report.examination) updateField("examination", processTemplate(report.examination, currentData as Patient));
         if (report.investigation) updateField("investigation", processTemplate(report.investigation, currentData as Patient));
+        if (report.procedure) updateField("procedure", report.procedure);
 
         setIsSearchOpen(false);
+    };
+
+    const handleSaveTemplate = () => {
+        const name = window.prompt("Enter a name for this template:");
+        if (!name) return;
+
+        const newReport: CaseReport = {
+            id: `custom-${Date.now()}`,
+            title: name,
+            diagnosis: formData.diagnosis || "Unknown Diagnosis",
+            procedure: formData.procedure,
+            history: formData.history || "",
+            examination: formData.examination || "",
+            investigation: formData.investigation || "",
+            tags: ["custom"],
+            isSystem: false
+        };
+
+        addReport(newReport);
+        alert("Template saved successfully!");
     };
     useEffect(() => {
         // Load defaults if empty
@@ -354,6 +382,14 @@ export default function PatientDetailModal({ patient, onClose, onSave, onDischar
                                     >
                                         <BookOpen size={12} />
                                         <span>Smart Search</span>
+                                    </button>
+                                    <button
+                                        onClick={handleSaveTemplate}
+                                        className="flex items-center space-x-2 rounded-lg bg-blue-500/10 px-3 py-1.5 text-xs font-medium text-blue-400 hover:bg-blue-500/20"
+                                        title="Save current form as a reusable template"
+                                    >
+                                        <Save size={12} />
+                                        <span>Save as Template</span>
                                     </button>
                                 </div>
                                 <div className="grid grid-cols-2 gap-4">
