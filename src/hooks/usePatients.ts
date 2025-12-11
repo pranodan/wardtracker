@@ -97,7 +97,7 @@ export function usePatients() {
                 const edit = patientEdits[p.hospitalNo];
 
                 // Fields that ALWAYS come from Sheet (unless missing in Sheet)
-                const LOCKED_FIELDS = ["bedNo", "name", "ageGender", "consultant", "ipDate", "hospitalNo", "procedure"];
+                const LOCKED_FIELDS = ["bedNo", "name", "ageGender", "consultant", "ipDate", "hospitalNo"];
 
                 // Only merge fields that are NOT errors AND NOT locked
                 const cleanEdit: any = {};

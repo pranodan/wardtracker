@@ -1,7 +1,9 @@
 "use client";
 
 import { Patient } from "@/types";
-import { X, Save, Activity, ClipboardList, BookOpen, AlertTriangle, FileOutput, Plus, Trash2, Calendar as CalendarIcon, ChevronUp, ChevronDown, Loader2, FileText, ArrowRightLeft } from "lucide-react";
+import { X, Save, Activity, ClipboardList, BookOpen, AlertTriangle, FileOutput, Plus, Trash2, Calendar as CalendarIcon, ChevronUp, ChevronDown, Loader2, FileText, ArrowRightLeft, Copy, Check } from "lucide-react";
+import { format, differenceInDays, isValid, compareDesc } from "date-fns";
+import { parseAnyDate } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
 import { useState, useEffect } from "react";
 import { cn } from "@/lib/utils";
@@ -48,6 +50,7 @@ export default function PatientDetailModal({ patient, onClose, onSave, onDischar
     const [newSurgery, setNewSurgery] = useState({ procedure: "", dop: "" });
     const [isAddingSurgery, setIsAddingSurgery] = useState(false);
     const [isTransferring, setIsTransferring] = useState(false);
+    const [hasCopied, setHasCopied] = useState(false);
 
     // Knowledge Base State
     const [isSearchOpen, setIsSearchOpen] = useState(false);
@@ -98,6 +101,14 @@ export default function PatientDetailModal({ patient, onClose, onSave, onDischar
     const removeSurgery = (index: number) => {
         const currentSurgeries = formData.surgeries || [];
         updateField("surgeries", currentSurgeries.filter((_, i) => i !== index));
+    };
+
+    const updateSurgery = (index: number, field: "procedure" | "dop", value: string) => {
+        const currentSurgeries = [...(formData.surgeries || [])];
+        if (currentSurgeries[index]) {
+            currentSurgeries[index] = { ...currentSurgeries[index], [field]: value };
+            updateField("surgeries", currentSurgeries);
+        }
     };
 
     const processTemplate = (text: string, patientData: Patient) => {
@@ -207,6 +218,113 @@ export default function PatientDetailModal({ patient, onClose, onSave, onDischar
     useEffect(() => { if (formData.domain) localStorage.setItem("last_domain", formData.domain); }, [formData.domain]);
     useEffect(() => { if (formData.level) localStorage.setItem("last_level", formData.level); }, [formData.level]);
 
+    const handleCopy = () => {
+        const p = { ...patient, ...formData } as Patient;
+
+        // 1. Determine Most Recent Procedure
+        let recentProcText = "";
+        let recentProcDateLine = "";
+        let diagnosisPrefix = "";
+
+        // Collect all procedures
+        const allProcedures: { name: string; date: Date | null; dopStr: string }[] = [];
+
+        if (p.procedure) {
+            allProcedures.push({
+                name: p.procedure,
+                date: parseAnyDate(p.dop || "") || null,
+                dopStr: p.dop || ""
+            });
+        }
+        if (p.surgeries && p.surgeries.length > 0) {
+            p.surgeries.forEach(s => {
+                allProcedures.push({
+                    name: s.procedure,
+                    date: parseAnyDate(s.dop) || null,
+                    dopStr: s.dop
+                });
+            });
+        }
+
+        // Sort desc
+        allProcedures.sort((a, b) => {
+            if (!a.date && !b.date) return 0;
+            if (!a.date) return 1;
+            if (!b.date) return -1;
+            return compareDesc(a.date, b.date); // Latest first
+        });
+
+        if (allProcedures.length > 0) {
+            const latest = allProcedures[0];
+
+            // Format Diagnosis Prefix: "2POD Radial head replacement for "
+            // ONLY if there is more than 1 procedure
+            // Format Diagnosis Prefix: "2POD Radial head replacement for "
+            // ONLY if there is more than 1 procedure
+            if (allProcedures.length > 1) {
+                const older = allProcedures[1];
+                if (older.date && isValid(older.date)) {
+                    const diff = differenceInDays(new Date(), older.date);
+                    const pod = diff >= 0 ? `${diff}POD` : "";
+                    // If diff is negative (future date), maybe just show date? assuming past for POD
+                    diagnosisPrefix = `${pod ? pod + " " : ""}${older.name} for `;
+                } else {
+                    diagnosisPrefix = `${older.name} for `;
+                }
+            }
+
+            // Format Procedure Section
+            // Use the date string provided by user if valid, else fallback
+            let dateStr = latest.dopStr;
+            if (latest.date && isValid(latest.date)) {
+                dateStr = format(latest.date, "dd-MMM-yyyy");
+            }
+
+            recentProcDateLine = dateStr ? `${dateStr}` : "";
+            recentProcText = latest.name;
+        }
+
+        // Format Diagnosis Line
+        // Logic: If we have a recent procedure, we prefix. 
+        // Example: "2POD Radial head replacement for Right radial head fracture"
+        const finalDiagnosis = diagnosisPrefix
+            ? `${diagnosisPrefix}${p.diagnosis || ""}`
+            : (p.diagnosis || "");
+
+
+        const lines = [
+            "Namaste Sir,",
+            "*Case Update*",
+            "",
+            "*Patient Name:*",
+            p.name,
+            "",
+            "*Age/Sex:*",
+            p.ageGender,
+            "",
+            "*Current Bed:*",
+            p.bedNo,
+            "",
+            "*Diagnosis:*",
+            finalDiagnosis,
+            "",
+            "*Procedure:*",
+            recentProcDateLine,
+            recentProcText,
+            "",
+            "*Plan:*",
+            p.plan || ""
+        ];
+
+        // Filter out empty lines if needed? The format asks for blank lines between sections, so we keep them.
+        // Copy to clipboard
+        navigator.clipboard.writeText(lines.join("\n"));
+
+        // Feedback
+        setHasCopied(true);
+        setTimeout(() => setHasCopied(false), 2000);
+    };
+
 
     const handleTransferClick = (c: string) => {
         if (onTransfer) onTransfer(patient, c);
@@ -307,12 +425,25 @@ export default function PatientDetailModal({ patient, onClose, onSave, onDischar
                                     {/* Additional Surgeries List */}
                                     {formData.surgeries?.map((s, i) => (
                                         <div key={i} className="flex items-center justify-between rounded-lg bg-white/5 p-3">
-                                            <div className="flex-1">
-                                                <div className="font-medium text-white text-sm">{s.procedure}</div>
-                                                <div className="text-xs text-gray-400">DOP: {s.dop}</div>
+                                            <div className="flex-1 flex gap-2">
+                                                <input
+                                                    type="text"
+                                                    value={s.procedure}
+                                                    onChange={(e) => updateSurgery(i, "procedure", e.target.value)}
+                                                    className="flex-1 bg-transparent text-sm text-white outline-none border-b border-transparent focus:border-primary transition-colors"
+                                                    disabled={readOnly}
+                                                    placeholder="Procedure Name"
+                                                />
+                                                <input
+                                                    type="date"
+                                                    value={s.dop}
+                                                    onChange={(e) => updateSurgery(i, "dop", e.target.value)}
+                                                    className="w-32 bg-transparent text-xs text-gray-400 outline-none border-b border-transparent focus:border-primary transition-colors"
+                                                    disabled={readOnly}
+                                                />
                                             </div>
                                             {!readOnly && (
-                                                <button onClick={() => removeSurgery(i)} className="text-gray-500 hover:text-red-500">
+                                                <button onClick={() => removeSurgery(i)} className="ml-2 text-gray-500 hover:text-red-500">
                                                     <Trash2 size={14} />
                                                 </button>
                                             )}
@@ -427,6 +558,18 @@ export default function PatientDetailModal({ patient, onClose, onSave, onDischar
                                         title="Search Case Reports (Knowledge Base)"
                                     >
                                         <BookOpen size={20} />
+                                    </button>
+
+                                    {/* Copy Button */}
+                                    <button
+                                        onClick={handleCopy}
+                                        className={cn(
+                                            "rounded-lg p-2 transition-colors",
+                                            hasCopied ? "bg-blue-500/20 text-blue-400" : "bg-blue-500/10 text-blue-400 hover:bg-blue-500/20"
+                                        )}
+                                        title="Copy Patient Details"
+                                    >
+                                        {hasCopied ? <Check size={20} /> : <Copy size={20} />}
                                     </button>
                                 </div>
 
