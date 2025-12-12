@@ -387,20 +387,21 @@ export default function PatientDetailModal({ patient, onClose, onSave, onDischar
                                         <div className="mb-1 text-xs text-gray-500 uppercase">Primary Procedure</div>
                                         <div className="flex space-x-2 mb-2">
                                             <div className="flex-1">
-                                                <input
-                                                    type="text"
-                                                    value={formData.procedure || ""}
-                                                    onChange={(e) => updateField("procedure", e.target.value)}
-                                                    className="w-full rounded bg-transparent p-1 text-sm text-white outline-none border-b border-white/10 focus:border-primary"
-                                                    disabled={readOnly}
-                                                    placeholder="Procedure Name"
-                                                />
-                                            </div>
+                                                <div className="flex-1">
+                                                    <ExpandableInput
+                                                        value={formData.procedure || ""}
+                                                        onChange={(v) => updateField("procedure", v)}
+                                                        className="w-full rounded bg-transparent p-1 text-sm text-white outline-none border-b border-white/10 focus:border-primary"
+                                                        placeHolder="Procedure Name"
+                                                        disabled={readOnly}
+                                                    />
+                                                </div>                                            </div>
                                             <div className="w-32">
                                                 <input
                                                     type="date"
                                                     value={formData.dop || ""}
                                                     onChange={(e) => updateField("dop", e.target.value)}
+                                                    onClick={(e) => e.currentTarget.showPicker()}
                                                     className="w-full rounded bg-transparent p-1 text-sm text-gray-400 outline-none border-b border-white/10 focus:border-primary"
                                                     disabled={readOnly}
                                                 />
@@ -426,18 +427,18 @@ export default function PatientDetailModal({ patient, onClose, onSave, onDischar
                                     {formData.surgeries?.map((s, i) => (
                                         <div key={i} className="flex items-center justify-between rounded-lg bg-white/5 p-3">
                                             <div className="flex-1 flex gap-2">
-                                                <input
-                                                    type="text"
+                                                <ExpandableInput
                                                     value={s.procedure}
-                                                    onChange={(e) => updateSurgery(i, "procedure", e.target.value)}
+                                                    onChange={(v) => updateSurgery(i, "procedure", v)}
                                                     className="flex-1 bg-transparent text-sm text-white outline-none border-b border-transparent focus:border-primary transition-colors"
                                                     disabled={readOnly}
-                                                    placeholder="Procedure Name"
+                                                    placeHolder="Procedure Name"
                                                 />
                                                 <input
                                                     type="date"
                                                     value={s.dop}
                                                     onChange={(e) => updateSurgery(i, "dop", e.target.value)}
+                                                    onClick={(e) => e.currentTarget.showPicker()}
                                                     className="w-32 bg-transparent text-xs text-gray-400 outline-none border-b border-transparent focus:border-primary transition-colors"
                                                     disabled={readOnly}
                                                 />
@@ -488,6 +489,7 @@ export default function PatientDetailModal({ patient, onClose, onSave, onDischar
                                                         type="date"
                                                         value={newSurgery.dop}
                                                         onChange={(e) => setNewSurgery({ ...newSurgery, dop: e.target.value })}
+                                                        onClick={(e) => e.currentTarget.showPicker()}
                                                         className="w-full rounded bg-white/5 p-2 text-sm text-white outline-none focus:ring-1 focus:ring-primary"
                                                     />
                                                     <div className="flex space-x-2">
@@ -500,8 +502,8 @@ export default function PatientDetailModal({ patient, onClose, onSave, onDischar
                                     )}
                                 </div>
 
-                                <InputGroup label="Plan" value={formData.plan} onChange={(v: string) => updateField("plan", v)} textarea disabled={readOnly} />
-                                <InputGroup label="NPO / Remarks" value={formData.npoStatus} onChange={(v: string) => updateField("npoStatus", v)} textarea disabled={readOnly} />
+                                <InputGroup label="Plan" value={formData.plan} onChange={(v: string) => updateField("plan", v)} disabled={readOnly} />
+
                             </div>
                         ) : activeTab === "clinical_data" ? (
                             <div className="space-y-6">
@@ -512,7 +514,7 @@ export default function PatientDetailModal({ patient, onClose, onSave, onDischar
                                         className="flex items-center space-x-2 rounded-lg bg-green-500/10 px-3 py-1.5 text-xs font-medium text-green-500 hover:bg-green-500/20"
                                     >
                                         <BookOpen size={12} />
-                                        <span>Smart Search</span>
+                                        <span>Templates / Search</span>
                                     </button>
                                     <button
                                         onClick={handleSaveTemplate}
@@ -757,14 +759,33 @@ interface InputGroupProps {
 }
 
 function InputGroup({ label, value, onChange, textarea, disabled }: InputGroupProps) {
-    return (
-        <div>
-            <label className="mb-1 block text-xs font-medium text-gray-400 uppercase">{label}</label>
-            {textarea ? (
+    const [isExpanded, setIsExpanded] = useState(false);
+
+    if (textarea) {
+        return (
+            <div>
+                <label className="mb-1 block text-xs font-medium text-gray-400 uppercase">{label}</label>
                 <textarea
                     value={value || ""}
                     onChange={(e) => onChange(e.target.value)}
                     className="h-24 w-full rounded-lg border border-white/10 bg-white/5 p-3 text-sm text-white outline-none focus:border-primary disabled:opacity-50"
+                    placeholder={`Enter ${label.toLowerCase()}...`}
+                    disabled={disabled}
+                />
+            </div>
+        );
+    }
+
+    return (
+        <div>
+            <label className="mb-1 block text-xs font-medium text-gray-400 uppercase">{label}</label>
+            {isExpanded ? (
+                <textarea
+                    value={value || ""}
+                    onChange={(e) => onChange(e.target.value)}
+                    onBlur={() => setIsExpanded(false)}
+                    autoFocus
+                    className="h-24 w-full rounded-lg border border-white/10 bg-white/5 p-3 text-sm text-white outline-none focus:border-primary disabled:opacity-50 animate-in fade-in zoom-in-95 duration-200"
                     placeholder={`Enter ${label.toLowerCase()}...`}
                     disabled={disabled}
                 />
@@ -773,10 +794,48 @@ function InputGroup({ label, value, onChange, textarea, disabled }: InputGroupPr
                     type="text"
                     value={value || ""}
                     onChange={(e) => onChange(e.target.value)}
-                    className="w-full rounded-lg border border-white/10 bg-white/5 p-3 text-sm text-white outline-none focus:border-primary disabled:opacity-50"
+                    onFocus={() => !disabled && setIsExpanded(true)}
+                    className="w-full rounded-lg border border-white/10 bg-white/5 p-3 text-sm text-white outline-none focus:border-primary disabled:opacity-50 transition-all"
                     disabled={disabled}
                 />
             )}
         </div>
+    );
+}
+
+interface ExpandableInputProps {
+    value: string;
+    onChange: (val: string) => void;
+    placeHolder?: string;
+    disabled?: boolean;
+    className?: string;
+}
+
+function ExpandableInput({ value, onChange, placeHolder, disabled, className }: ExpandableInputProps) {
+    const [isExpanded, setIsExpanded] = useState(false);
+
+    if (isExpanded) {
+        return (
+            <textarea
+                value={value || ""}
+                onChange={(e) => onChange(e.target.value)}
+                onBlur={() => setIsExpanded(false)}
+                autoFocus
+                className="h-24 w-full rounded-lg border border-white/10 bg-white/5 p-3 text-sm text-white outline-none focus:border-primary disabled:opacity-50 animate-in fade-in zoom-in-95 duration-200"
+                placeholder={placeHolder}
+                disabled={disabled}
+            />
+        );
+    }
+    return (
+        <input
+            type="text"
+            value={value || ""}
+            onChange={(e) => onChange(e.target.value)}
+            onFocus={() => !disabled && setIsExpanded(true)}
+            className={className}
+            placeholder={placeHolder}
+            disabled={disabled}
+        />
     );
 }

@@ -10,6 +10,7 @@ interface DischargeFormProps {
     patient: Patient;
     onClose: () => void;
     onConfirmDischarge: (dischargeData: any) => void;
+    onSave?: (patientData: Patient) => void;
 }
 
 const HISTORY_SUGGESTIONS = [
@@ -26,42 +27,56 @@ const CLINICAL_SUGGESTIONS = [
     "Distal neurovascular status intact"
 ];
 
-export default function DischargeForm({ patient, onClose, onConfirmDischarge }: DischargeFormProps) {
+export default function DischargeForm({ patient, onClose, onConfirmDischarge, onSave }: DischargeFormProps) {
     const [category, setCategory] = useState<ProcedureCategory | "">("");
     const [isProcedureOpen, setIsProcedureOpen] = useState(false);
 
-    const [formData, setFormData] = useState({
-        programYear: patient.programYear || "", // Mapped from Patient Details
-        programBlock: "",
-        domain: "Skill", // Default as requested
-        level: patient.level || "", // Mapped from Patient Details
-        procedureName: "", // Intentionally empty, user must select
-        procedureDescription: "",
-        date: new Date().toISOString().split('T')[0],
-        inPatientId: patient.hospitalNo || "", // Mapped to 8 digit ID (Hospital No)
-        patientName: patient.name || "",
-        age: patient.ageGender?.split('/')[0]?.replace(/\D/g, '') || "",
-        address: "",
-        history: patient.history || "", // Mapped from Patient Details
-        diagnosis: patient.examination || "", // Clinical Exam / Findings - Mapped from 'examination'
-        investigation: patient.investigation || "", // Mapped from Patient Details
-        provisionalDiagnosis: patient.diagnosis || "",
-        finalDiagnosis: patient.diagnosis || "",
-        management: (() => {
-            let mgmt = patient.plan || "";
-            // Also include procedures in management as requested
-            let proc = patient.procedure || "";
-            if (patient.surgeries && patient.surgeries.length > 0) {
-                const surgeryText = patient.surgeries.map(s => `${s.procedure} (${s.dop})`).join(", ");
-                proc = proc ? `${proc}, ${surgeryText}` : surgeryText;
-            }
-            if (proc) {
-                mgmt = mgmt ? `Procedure: ${proc}\n\n${mgmt}` : `Procedure: ${proc}`;
-            }
-            return mgmt;
-        })(),
-        followUp: "",
-        submittedTo: [] as string[],
+    const [formData, setFormData] = useState(() => {
+        try {
+            console.log("Initializing DischargeForm with patient:", patient);
+            return {
+                programYear: patient.programYear || "",
+                programBlock: "",
+                domain: "Skill",
+                level: patient.level || "",
+                procedureName: "",
+                procedureDescription: "",
+                date: new Date().toISOString().split('T')[0],
+                inPatientId: patient.hospitalNo || "",
+                patientName: patient.name || "",
+                age: (() => {
+                    try {
+                        return String(patient.ageGender || "").split('/')[0]?.replace(/\D/g, '') || "";
+                    } catch (e) { return ""; }
+                })(),
+                address: "",
+                history: patient.history || "",
+                diagnosis: patient.examination || "",
+                investigation: patient.investigation || "",
+                provisionalDiagnosis: patient.diagnosis || "",
+                finalDiagnosis: patient.diagnosis || "",
+                management: (() => {
+                    let mgmt = patient.plan || "";
+                    let proc = patient.procedure || "";
+                    if (Array.isArray(patient.surgeries) && patient.surgeries.length > 0) {
+                        const surgeryText = patient.surgeries.map(s => `${s.procedure} (${s.dop})`).join(", ");
+                        proc = proc ? `${proc}, ${surgeryText}` : surgeryText;
+                    }
+                    if (proc) {
+                        mgmt = mgmt ? `Procedure: ${proc}\n\n${mgmt}` : `Procedure: ${proc}`;
+                    }
+                    return mgmt;
+                })(),
+                followUp: "",
+                submittedTo: [] as string[],
+            };
+        } catch (err) {
+            console.error("Error initializing DischargeForm state:", err);
+            // Return safe default
+            return {
+                programYear: "", programBlock: "", domain: "Skill", level: "", procedureName: "", procedureDescription: "", date: "", inPatientId: "", patientName: "", age: "", address: "", history: "", diagnosis: "", investigation: "", provisionalDiagnosis: "", finalDiagnosis: "", management: "", followUp: "", submittedTo: []
+            };
+        }
     });
 
     const handleChange = (field: string, value: any) => {
@@ -79,6 +94,25 @@ export default function DischargeForm({ patient, onClose, onConfirmDischarge }: 
             ...formData,
             originalPatientId: patient.id,
         });
+    };
+
+    const handleJustSave = () => {
+        if (onSave) {
+            // Map form data back to patient structure where appropriate
+            onSave({
+                ...patient,
+                programYear: formData.programYear,
+                programBlock: formData.programBlock,
+                domain: formData.domain,
+                level: formData.level,
+                history: formData.history, // Map back
+                examination: formData.diagnosis, // Map "Diagnosis" field (Clinical Findings) back to 'examination'
+                investigation: formData.investigation,
+                diagnosis: formData.finalDiagnosis || formData.provisionalDiagnosis, // Prefer final diagnosis
+                plan: formData.management // Map 'Management' back to 'plan'
+            });
+            onClose();
+        }
     };
 
     const addSuggestion = (field: "history" | "diagnosis", text: string) => {
@@ -476,6 +510,12 @@ export default function DischargeForm({ patient, onClose, onConfirmDischarge }: 
                 <div className="flex-none border-t border-white/10 bg-[#0a0a0a] p-6">
                     <div className="flex justify-end space-x-4">
                         <button onClick={onClose} className="px-6 py-2 rounded-lg text-gray-400 hover:text-white font-medium">Cancel</button>
+                        {onSave && (
+                            <button onClick={handleJustSave} className="px-6 py-2 rounded-lg bg-blue-500/10 text-blue-400 font-bold hover:bg-blue-500/20 flex items-center space-x-2">
+                                <Save size={18} />
+                                <span>Save</span>
+                            </button>
+                        )}
                         <button onClick={handleSubmit} className="px-6 py-2 rounded-lg bg-primary text-black font-bold hover:bg-primary/90 flex items-center space-x-2">
                             <Save size={18} />
                             <span>Confirm Discharge & Save</span>
@@ -504,6 +544,7 @@ function InputField({ label, value, onChange, type = "text", placeholder }: Inpu
                 type={type}
                 value={value}
                 onChange={(e) => onChange(e.target.value)}
+                onClick={(e) => type === "date" && e.currentTarget.showPicker()}
                 placeholder={placeholder}
                 className="w-full bg-white/5 border border-white/10 rounded-lg p-3 text-sm text-white focus:border-primary outline-none"
             />

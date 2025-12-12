@@ -34,13 +34,21 @@ export function parseAnyDate(dateStr: string | undefined): Date | null {
 
 export function getInitials(name: string | undefined): string {
     if (!name) return "";
-    // Remove "Dr.", "Prof." etc, split by space, take first char of each valid word
-    const cleanName = name.replace(/^(Dr\.|Prof\.|Prof\. Dr\.|Mr\.|Mrs\.|Ms\.)\s*/i, "").replace(/^(Dr|Prof|Prof\. Dr|Mr|Mrs|Ms)\s+/i, "");
+
+    const isProfessor = /prof/i.test(name);
+
+    // Remove "Dr.", "Prof.", "Prof. Dr." etc, split by space
+    // We remove "Prof" variations specifically to clean the name
+    const cleanName = name
+        .replace(/^(Prof\.?\s*Dr\.?|Prof\.?|Dr\.?|Mr\.?|Mrs\.?|Ms\.?)\s+/i, "") // Standard prefixes
+        .replace(/\b(Prof|Dr)\b\.?/gi, "") // Any rogue titles
+        .trim();
+
     const initials = cleanName
         .split(' ')
         .filter(part => part.length > 0 && /^[a-zA-Z]/.test(part))
         .map(part => part[0].toUpperCase())
         .join('');
 
-    return `Dr ${initials}`;
+    return `${isProfessor ? "Prof" : "Dr"} ${initials}`;
 }

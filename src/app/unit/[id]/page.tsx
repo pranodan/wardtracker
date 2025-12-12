@@ -425,6 +425,7 @@ export default function UnitPage() {
                     patient={dischargingPatient}
                     onClose={() => setDischargingPatient(null)}
                     onConfirmDischarge={handleConfirmDischarge}
+                    onSave={handleSavePatient}
                 />
             )}
 

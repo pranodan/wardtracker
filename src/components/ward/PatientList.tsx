@@ -301,6 +301,10 @@ export default function PatientList({
                         if (onDischargePatient) onDischargePatient({ ...dischargePatient, ...data, status: "discharged" });
                         setShowDischargeForm(false);
                     }}
+                    onSave={async (p) => {
+                        if (onUpdatePatient) await onUpdatePatient(p as Patient);
+                        setShowDischargeForm(false);
+                    }}
                 />
             )}
         </div>
