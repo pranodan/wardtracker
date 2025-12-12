@@ -92,6 +92,7 @@ export default function DischargeForm({ patient, onClose, onConfirmDischarge, on
     const handleSubmit = () => {
         onConfirmDischarge({
             ...formData,
+            hospitalNo: patient.hospitalNo, // CRITICAL: Required for UnitPage to identify and discharge the patient
             originalPatientId: patient.id,
         });
     };
