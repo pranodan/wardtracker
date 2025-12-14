@@ -33,12 +33,14 @@ export const DEFAULT_BED_GROUPS: BedGroup[] = [
 export function getBedGroup(bedNo: string, groups: BedGroup[] = DEFAULT_BED_GROUPS): string {
     if (!bedNo) return "Unassigned";
     const bed = bedNo.toUpperCase();
+    // Normalize bed for specific/exclude checks (e.g. "528-8" -> "528")
+    const baseBed = bed.split('-')[0].trim();
 
     for (const group of groups) {
-        if (group.specific?.includes(bed)) return group.name;
+        if (group.specific?.includes(baseBed)) return group.name;
         if (group.match && bed.includes(group.match)) return group.name;
         if (group.prefix && bed.startsWith(group.prefix)) {
-            if (group.exclude?.includes(bed)) continue;
+            if (group.exclude?.includes(baseBed)) continue;
             return group.name;
         }
     }

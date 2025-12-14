@@ -25,6 +25,7 @@ export default function RootLayout({
     <html lang="en" suppressHydrationWarning>
       <body
         className={`${outfit.variable} antialiased`}
+        suppressHydrationWarning
       >
         <AuthProvider>
           <ToastProvider>

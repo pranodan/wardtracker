@@ -1,7 +1,7 @@
 "use client";
 
 import { Patient } from "@/types";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Search, ChevronDown, ChevronUp } from "lucide-react";
 import { parseAnyDate } from "@/lib/utils";
@@ -10,6 +10,7 @@ import PatientSummaryModal from "./PatientSummaryModal";
 import DischargeForm from "./DischargeForm";
 import RoundMap from "./RoundMap";
 import CalendarView from "./CalendarView";
+import GalleryView from "./GalleryView";
 
 interface PatientListProps {
     patients: Patient[];
@@ -47,15 +48,22 @@ export default function PatientList({
     isCollapsed: externalIsCollapsed,
     onToggleCollapse,
     groupByDate,
-    showConsultantInitials
+    showConsultantInitials,
+    unitId
 }: PatientListProps) {
     const [searchQuery, setSearchQuery] = useState("");
     const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
     const [showDischargeForm, setShowDischargeForm] = useState(false);
     const [dischargePatient, setDischargePatient] = useState<Patient | null>(null);
     const [internalIsCollapsed, setInternalIsCollapsed] = useState(false);
+    const [isMounted, setIsMounted] = useState(false);
+
+    useEffect(() => {
+        setIsMounted(true);
+    }, []);
 
     const isCollapsed = externalIsCollapsed !== undefined ? externalIsCollapsed : internalIsCollapsed;
+
     const handleToggleCollapse = () => {
         if (onToggleCollapse) {
             onToggleCollapse();
@@ -88,6 +96,8 @@ export default function PatientList({
         setDischargePatient(patient);
         setShowDischargeForm(true);
     };
+
+    if (!isMounted) return null;
 
     return (
         <div className="space-y-6">
@@ -248,11 +258,19 @@ export default function PatientList({
                                 </div>
                             )
                         ) : viewMode === "calendar" ? (
-                            <CalendarView
-                                patients={filteredPatients}
-                                onPatientClick={handleCardClick}
-                                showConsultantInitials={showConsultantInitials}
-                            />
+                            unitId ? (
+                                <GalleryView
+                                    patients={filteredPatients}
+                                    onPatientClick={handleCardClick}
+                                    showConsultantInitials={showConsultantInitials}
+                                />
+                            ) : (
+                                <CalendarView
+                                    patients={filteredPatients}
+                                    onPatientClick={handleCardClick}
+                                    showConsultantInitials={showConsultantInitials}
+                                />
+                            )
                         ) : (
                             // Floor / Cards / Grid (re-using RoundMap for now as it supports grid layout)
                             <RoundMap

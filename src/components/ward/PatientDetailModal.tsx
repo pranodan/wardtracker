@@ -5,7 +5,7 @@ import { X, Save, Activity, ClipboardList, BookOpen, AlertTriangle, FileOutput, 
 import { format, differenceInDays, isValid, compareDesc } from "date-fns";
 import { parseAnyDate } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { cn } from "@/lib/utils";
 import TrackingTable from "./TrackingTable";
 import CaseReportSelector from "./CaseReportSelector";
@@ -51,6 +51,23 @@ export default function PatientDetailModal({ patient, onClose, onSave, onDischar
     const [isAddingSurgery, setIsAddingSurgery] = useState(false);
     const [isTransferring, setIsTransferring] = useState(false);
     const [hasCopied, setHasCopied] = useState(false);
+    const [showArchivedToast, setShowArchivedToast] = useState(false);
+    const archivedPlanRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            if (archivedPlanRef.current && !archivedPlanRef.current.contains(event.target as Node)) {
+                setShowArchivedToast(false);
+            }
+        };
+
+        if (showArchivedToast) {
+            document.addEventListener("mousedown", handleClickOutside);
+        }
+        return () => {
+            document.removeEventListener("mousedown", handleClickOutside);
+        };
+    }, [showArchivedToast]);
 
     // Knowledge Base State
     const [isSearchOpen, setIsSearchOpen] = useState(false);
@@ -59,7 +76,40 @@ export default function PatientDetailModal({ patient, onClose, onSave, onDischar
     // Sync state with prop changes
     useEffect(() => {
         if (patient) {
-            setFormData(patient);
+            // Plan Archival Logic
+            // Rule: Plan resets at 9:00 AM daily.
+            // If the plan was last updated BEFORE the most recent 9:00 AM, it should be archived.
+
+            const now = new Date();
+            let last9am = new Date(now);
+            if (now.getHours() < 9) {
+                last9am.setDate(now.getDate() - 1);
+            }
+            last9am.setHours(9, 0, 0, 0);
+
+            const lastUpdate = patient.lastPlanUpdate ? new Date(patient.lastPlanUpdate) : null;
+            const hasPlan = !!patient.plan;
+
+            let finalData = { ...patient };
+
+            // Check if we need to archive
+            // We archive IF:
+            // 1. There is a plan
+            // 2. AND (Last update is unknown OR Last update is older than the cutoff)
+            const shouldArchive = hasPlan && (!lastUpdate || lastUpdate < last9am);
+
+            if (shouldArchive) {
+                finalData.archivedPlan = patient.plan;
+                finalData.plan = ""; // Clear current plan
+                // We don't update lastPlanUpdate here because that indicates a USER action.
+                // We just shift the data for the UI.
+                // However, if we don't save this state, it will re-archive every time?
+                // Yes, but that's fine, as long as the result is consistent.
+                // If user saves, it commits the clear.
+                // If user doesn't save, next open will see it archived again.
+            }
+
+            setFormData(finalData);
         }
     }, [patient]);
 
@@ -71,8 +121,21 @@ export default function PatientDetailModal({ patient, onClose, onSave, onDischar
     const handleSave = async () => {
         setIsSaving(true);
         // Simulate network delay
+        // Simulate network delay
         await new Promise(resolve => setTimeout(resolve, 600));
-        onSave({ ...patient, ...formData } as Patient);
+
+        // Update timestamp for plan if plan changed? Or always?
+        // The requirement implies we track when the plan was written.
+        // So we should update it if plan is being saved.
+        // For simplicity and robustness, we update it on any save, 
+        // effectively confirming the "status quo" of the plan for today.
+        const updatedPatient = {
+            ...patient,
+            ...formData,
+            lastPlanUpdate: new Date().toISOString()
+        } as Patient;
+
+        onSave(updatedPatient);
         setIsSaving(false);
         setIsDirty(false);
     };
@@ -302,6 +365,9 @@ export default function PatientDetailModal({ patient, onClose, onSave, onDischar
             "*Age/Sex:*",
             p.ageGender,
             "",
+            "*Consultant:*",
+            p.consultant || "Unknown",
+            "",
             "*Current Bed:*",
             p.bedNo,
             "",
@@ -502,7 +568,65 @@ export default function PatientDetailModal({ patient, onClose, onSave, onDischar
                                     )}
                                 </div>
 
-                                <InputGroup label="Plan" value={formData.plan} onChange={(v: string) => updateField("plan", v)} disabled={readOnly} />
+
+
+                                {/* Plan Section with Archival Display */}
+                                <div className="space-y-2">
+                                    {formData.archivedPlan && (
+                                        <div className="relative" ref={archivedPlanRef}>
+                                            <div
+                                                onClick={() => setShowArchivedToast(!showArchivedToast)}
+                                                className={cn(
+                                                    "cursor-pointer rounded-lg border border-dashed p-3 transition-colors",
+                                                    showArchivedToast ? "bg-white/10 border-white/40" : "bg-white/5 border-white/20 hover:bg-white/10"
+                                                )}
+                                            >
+                                                <div className="flex items-center space-x-2 text-xs text-gray-400">
+                                                    <CalendarIcon size={14} />
+                                                    <span className="uppercase">View Previous Plan (Read Only)</span>
+                                                </div>
+                                            </div>
+
+                                            {/* In-App Toast for Previous Plan */}
+                                            <AnimatePresence>
+                                                {showArchivedToast && (
+                                                    <motion.div
+                                                        initial={{ opacity: 0, y: 10 }}
+                                                        animate={{ opacity: 1, y: 0 }}
+                                                        exit={{ opacity: 0, y: 10 }}
+                                                        className="absolute bottom-full left-0 mb-2 w-full z-20 rounded-lg border border-primary/20 bg-[#151515] p-3 shadow-xl"
+                                                    >
+                                                        <div className="flex items-start justify-between mb-1">
+                                                            <div className="flex flex-col">
+                                                                <h4 className="text-xs font-bold text-primary uppercase">Previous Plan</h4>
+                                                                {patient.lastPlanUpdate && (
+                                                                    <span className="text-[10px] text-gray-500">
+                                                                        Last Edited: {format(new Date(patient.lastPlanUpdate), "dd MMM, hh:mm a")}
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                            <button
+                                                                onClick={(e) => { e.stopPropagation(); setShowArchivedToast(false); }}
+                                                                className="text-gray-500 hover:text-white"
+                                                            >
+                                                                <X size={14} />
+                                                            </button>
+                                                        </div>
+                                                        <p className="text-sm text-gray-300 whitespace-pre-wrap leading-relaxed max-h-40 overflow-y-auto custom-scrollbar">
+                                                            {formData.archivedPlan}
+                                                        </p>
+                                                    </motion.div>
+                                                )}
+                                            </AnimatePresence>
+                                        </div>
+                                    )}
+                                    <InputGroup
+                                        label="Plan"
+                                        value={formData.plan}
+                                        onChange={(v: string) => updateField("plan", v)}
+                                        disabled={readOnly}
+                                    />
+                                </div>
 
                             </div>
                         ) : activeTab === "clinical_data" ? (
@@ -695,8 +819,8 @@ export default function PatientDetailModal({ patient, onClose, onSave, onDischar
                         )}
                     </AnimatePresence>
                 </AnimatePresence>
-            </div>
-        </AnimatePresence>
+            </div >
+        </AnimatePresence >
     );
 }
 

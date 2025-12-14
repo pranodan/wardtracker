@@ -17,6 +17,8 @@ export interface Patient {
     dop?: string; // Date of Procedure
     surgeries?: { procedure: string; dop: string }[];
     plan?: string;
+    archivedPlan?: string; // Plan from previous day
+    lastPlanUpdate?: string; // ISO Date of last plan save
     tracking?: TrackingEntry[];
     status?: "admitted" | "marked_for_discharge" | "discharged" | "elective";
     isGhost?: boolean; // True if patient is removed from Sheet but exists in Unit
