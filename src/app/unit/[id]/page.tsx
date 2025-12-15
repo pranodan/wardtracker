@@ -331,7 +331,7 @@ export default function UnitPage() {
                                 groupByDate={true}
                                 highlightConsultants={unit.consultants}
                                 viewMode={viewMode === "cards" ? "calendar" : viewMode} // Default Main List to Calendar if cards
-                                unitId={unitId}
+                                // unitId={unitId} // Removed to force CalendarView instead of GalleryView
                                 onUpdatePatient={handleSavePatient}
                                 onDischargePatient={handleDischargeClick}
                                 onTransferPatient={handleTransfer}
@@ -383,6 +383,7 @@ export default function UnitPage() {
                                             consultants={unit.consultants}
                                             onRemovePatient={handleRemove}
                                             groups={groups}
+                                            enableBulkCopy={true}
                                         />
                                     );
                                 })}

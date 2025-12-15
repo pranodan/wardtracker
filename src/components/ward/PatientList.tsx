@@ -3,14 +3,15 @@
 import { Patient } from "@/types";
 import { useState, useMemo, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Search, ChevronDown, ChevronUp } from "lucide-react";
-import { parseAnyDate } from "@/lib/utils";
+import { Search, ChevronDown, ChevronUp, Copy, Check } from "lucide-react";
+import { parseAnyDate, cn } from "@/lib/utils";
 import PatientDetailModal from "./PatientDetailModal";
 import PatientSummaryModal from "./PatientSummaryModal";
 import DischargeForm from "./DischargeForm";
 import RoundMap from "./RoundMap";
 import CalendarView from "./CalendarView";
 import GalleryView from "./GalleryView";
+import { formatBulkPatientList } from "@/utils/patientFormatter";
 
 interface PatientListProps {
     patients: Patient[];
@@ -31,6 +32,7 @@ interface PatientListProps {
     onToggleCollapse?: () => void;
     groups?: import("@/utils/bedGrouping").BedGroup[];
     showConsultantInitials?: boolean;
+    enableBulkCopy?: boolean;
 }
 
 export default function PatientList({
@@ -49,7 +51,8 @@ export default function PatientList({
     onToggleCollapse,
     groupByDate,
     showConsultantInitials,
-    unitId
+    unitId,
+    enableBulkCopy
 }: PatientListProps) {
     const [searchQuery, setSearchQuery] = useState("");
     const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
@@ -57,6 +60,9 @@ export default function PatientList({
     const [dischargePatient, setDischargePatient] = useState<Patient | null>(null);
     const [internalIsCollapsed, setInternalIsCollapsed] = useState(false);
     const [isMounted, setIsMounted] = useState(false);
+    const [hasCopied, setHasCopied] = useState(false);
+    const [editingQueue, setEditingQueue] = useState<Patient[]>([]);
+    const [pendingIncompletePatients, setPendingIncompletePatients] = useState<Patient[]>([]);
 
     useEffect(() => {
         setIsMounted(true);
@@ -70,6 +76,82 @@ export default function PatientList({
         } else {
             setInternalIsCollapsed(!internalIsCollapsed);
         }
+    };
+
+    // Serial Editing Logic
+    const startSerialEditing = (incompletePatients: Patient[]) => {
+        setEditingQueue(incompletePatients);
+        if (incompletePatients.length > 0) {
+            setSelectedPatient(incompletePatients[0]);
+        }
+    };
+
+    const handleSerialSave = async (updatedPatient: Patient) => {
+        if (onUpdatePatient) {
+            await onUpdatePatient(updatedPatient);
+        }
+
+        // Remove processed patient from queue
+        // Note: We use the *updated* patient ID just in case, but index 0 is always current
+        const nextQueue = editingQueue.slice(1);
+        setEditingQueue(nextQueue);
+
+        if (nextQueue.length > 0) {
+            setSelectedPatient(nextQueue[0]);
+        } else {
+            setSelectedPatient(null);
+            // Finished!
+            alert("Editing Complete. Please click 'Copy All Details' again to copy the updated data.");
+        }
+    };
+
+    const handleSerialSkip = () => {
+        const nextQueue = editingQueue.slice(1);
+        setEditingQueue(nextQueue);
+        if (nextQueue.length > 0) {
+            setSelectedPatient(nextQueue[0]);
+        } else {
+            setSelectedPatient(null);
+        }
+    };
+
+    const performCopy = (targetPatients: Patient[]) => {
+        const text = formatBulkPatientList(title || "Unit List", targetPatients);
+        navigator.clipboard.writeText(text);
+
+        setHasCopied(true);
+        setTimeout(() => setHasCopied(false), 2000);
+    };
+
+    const handleBulkCopy = (e: React.MouseEvent) => {
+        e.stopPropagation();
+        if (!patients || patients.length === 0) return;
+
+        // Check for incomplete
+        const incomplete = patients.filter(p => {
+            // 1. Diagnosis Check
+            const diag = p.diagnosis?.trim() || "";
+            const isDiagInvalid = diag === "" || diag.toLowerCase().includes("no diagnosis");
+
+            // 2. Procedure Check
+            // Valid if: has procedure string OR has surgeries array
+            const procStr = p.procedure?.trim() || "";
+            const hasSurgeries = p.surgeries && p.surgeries.length > 0;
+            const isProcInvalid = procStr === "" && !hasSurgeries;
+
+            // 3. Plan Check
+            const plan = p.plan?.trim() || "";
+            const isPlanInvalid = plan === "" || plan.toLowerCase().includes("to be decided");
+
+            return isDiagInvalid || isProcInvalid || isPlanInvalid;
+        });
+
+        if (incomplete.length > 0) {
+            setPendingIncompletePatients(incomplete);
+            return;
+        }
+
+        performCopy(patients);
     };
 
     // Filter Logic
@@ -123,6 +205,23 @@ export default function PatientList({
                     )}
                 </div>
 
+                {/* Bulk Copy Button - Exclusively for enabled lists (Consultant View) */}
+                {enableBulkCopy && (
+                    <button
+                        onClick={handleBulkCopy}
+                        className={cn(
+                            "flex items-center space-x-2 rounded-full px-4 py-2 text-xs font-bold transition-all",
+                            hasCopied
+                                ? "bg-green-500/20 text-green-400"
+                                : "bg-white/10 text-white hover:bg-white/20"
+                        )}
+                        title="Copy All Patients"
+                    >
+                        {hasCopied ? <Check size={16} /> : <Copy size={16} />}
+                        <span>{hasCopied ? "Copied All" : "Copy All Details"}</span>
+                    </button>
+                )}
+
                 {/* Search */}
                 {!collapsible && (
                     <div className="relative w-full sm:w-72">
@@ -137,6 +236,44 @@ export default function PatientList({
                     </div>
                 )}
             </div>
+
+            {/* Incomplete Patients Warning Modal */}
+            {pendingIncompletePatients.length > 0 && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+                    <div className="w-full max-w-md bg-[#1a1a1a] border border-white/10 rounded-2xl shadow-2xl p-6 space-y-4">
+                        <div className="space-y-2">
+                            <h3 className="text-xl font-bold text-white">Incomplete Patient Details</h3>
+                            <p className="text-gray-400">
+                                {pendingIncompletePatients.length} patients have missing Diagnosis, Procedure, or Plan.
+                            </p>
+                            <p className="text-sm text-gray-500">
+                                It is recommended to review and update these details before copying.
+                            </p>
+                        </div>
+
+                        <div className="flex flex-col gap-3 pt-2">
+                            <button
+                                onClick={() => {
+                                    startSerialEditing(pendingIncompletePatients);
+                                    setPendingIncompletePatients([]);
+                                }}
+                                className="w-full bg-primary hover:bg-primary/80 text-black font-bold py-3 rounded-xl transition-all"
+                            >
+                                Review & Edit (Recommended)
+                            </button>
+                            <button
+                                onClick={() => {
+                                    performCopy(patients);
+                                    setPendingIncompletePatients([]);
+                                }}
+                                className="w-full bg-white/5 hover:bg-white/10 text-gray-400 py-3 rounded-xl transition-all"
+                            >
+                                Ignore & Copy Anyway
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* Content Area */}
             <AnimatePresence mode="wait">
@@ -301,12 +438,18 @@ export default function PatientList({
                 ) : (
                     <PatientDetailModal
                         patient={selectedPatient}
-                        onClose={() => setSelectedPatient(null)}
+                        onClose={() => {
+                            setSelectedPatient(null);
+                            setEditingQueue([]); // Cancel serial edit on manual close
+                        }}
                         onSave={onUpdatePatient || (async () => { })}
                         onDischarge={handleDischargeClick}
                         onTransfer={onTransferPatient}
                         consultants={consultants}
                         onRemove={onRemovePatient}
+                        // Serial Edit Props
+                        onSaveAndNext={editingQueue.length > 0 ? handleSerialSave : undefined}
+                        onSkip={editingQueue.length > 0 ? handleSerialSkip : undefined}
                     />
                 )
             )}

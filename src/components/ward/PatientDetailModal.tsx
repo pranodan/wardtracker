@@ -21,6 +21,8 @@ interface PatientDetailModalProps {
     onTransfer?: (patient: Patient, consultant: string) => void;
     consultants?: string[];
     onRemove?: (patient: Patient) => void;
+    onSaveAndNext?: (updatedPatient: Patient) => void;
+    onSkip?: () => void;
 }
 
 const PROCEDURE_SUGGESTIONS = [
@@ -41,7 +43,7 @@ const PROCEDURE_SUGGESTIONS = [
     "Tendon Transfer"
 ];
 
-export default function PatientDetailModal({ patient, onClose, onSave, onDischarge, readOnly, onTransfer, consultants, onRemove }: PatientDetailModalProps) {
+export default function PatientDetailModal({ patient, onClose, onSave, onDischarge, readOnly, onTransfer, consultants, onRemove, onSaveAndNext, onSkip }: PatientDetailModalProps) {
     const [activeTab, setActiveTab] = useState<"clinical" | "clinical_data" | "tracking">("clinical");
     const [formData, setFormData] = useState<Partial<Patient>>(patient || {});
     const [isDirty, setIsDirty] = useState(false);
@@ -672,118 +674,145 @@ export default function PatientDetailModal({ patient, onClose, onSave, onDischar
                     {/* Footer - Compact Icons Only */}
                     <div className="flex-none border-t border-white/10 bg-[#0a0a0a] p-4">
                         <div className="flex items-center justify-between">
-                            <div className="flex space-x-2">
-                                {/* AI Button */}
-                                <div className="relative">
+                            {/* Serial Editing Mode */}
+                            {onSaveAndNext && onSkip ? (
+                                <div className="flex w-full items-center justify-between space-x-4">
                                     <button
-                                        onClick={() => setIsSearchOpen(true)}
-                                        className={cn(
-                                            "rounded-lg p-2 transition-colors",
-                                            isSearchOpen ? "bg-green-500/20 text-green-400" : "bg-green-500/10 text-green-400 hover:bg-green-500/20"
-                                        )}
-                                        title="Search Case Reports (Knowledge Base)"
+                                        onClick={onSkip}
+                                        className="rounded-lg bg-white/10 px-6 py-2 text-sm font-medium text-white hover:bg-white/20"
                                     >
-                                        <BookOpen size={20} />
+                                        Skip
                                     </button>
-
-                                    {/* Copy Button */}
                                     <button
-                                        onClick={handleCopy}
-                                        className={cn(
-                                            "rounded-lg p-2 transition-colors",
-                                            hasCopied ? "bg-blue-500/20 text-blue-400" : "bg-blue-500/10 text-blue-400 hover:bg-blue-500/20"
-                                        )}
-                                        title="Copy Patient Details"
-                                    >
-                                        {hasCopied ? <Check size={20} /> : <Copy size={20} />}
-                                    </button>
-                                </div>
-
-                                {!readOnly && (
-                                    <>
-                                        {/* Transfer Button */}
-                                        {onTransfer && consultants && (
-                                            <div className="relative">
-                                                <button
-                                                    onClick={() => setIsTransferring(!isTransferring)}
-                                                    title="Transfer Patient"
-                                                    className={cn(
-                                                        "rounded-lg p-2 transition-colors",
-                                                        isTransferring ? "bg-blue-500/20 text-blue-400" : "bg-white/5 text-gray-400 hover:bg-white/10 hover:text-white"
-                                                    )}
-                                                >
-                                                    <ArrowRightLeft size={20} />
-                                                </button>
-                                                {isTransferring && (
-                                                    <div className="absolute bottom-full left-0 mb-2 w-56 rounded-lg border border-white/10 bg-[#1a1a1a] p-2 shadow-xl">
-                                                        <div className="mb-2 text-xs font-medium text-gray-400">Transfer to:</div>
-                                                        <div className="max-h-48 overflow-y-auto space-y-1">
-                                                            {consultants.map(c => (
-                                                                <button
-                                                                    key={c}
-                                                                    onClick={() => {
-                                                                        onTransfer(patient, c);
-                                                                        setIsTransferring(false);
-                                                                    }}
-                                                                    className="w-full rounded px-2 py-1 text-left text-xs text-gray-300 hover:bg-white/5 hover:text-white truncate"
-                                                                >
-                                                                    {c}
-                                                                </button>
-                                                            ))}
-                                                        </div>
-                                                    </div>
-                                                )}
-                                            </div>
-                                        )}
-
-                                        <button
-                                            onClick={toggleDischargeMark}
-                                            title={formData.status === "marked_for_discharge" ? "Unmark Discharge" : "Mark for Discharge"}
-                                            className={cn(
-                                                "rounded-lg p-2 transition-colors",
-                                                formData.status === "marked_for_discharge"
-                                                    ? "bg-yellow-500/20 text-yellow-500 hover:bg-yellow-500/30"
-                                                    : "bg-white/5 text-gray-400 hover:bg-white/10 hover:text-white"
-                                            )}
-                                        >
-                                            <AlertTriangle size={20} />
-                                        </button>
-
-                                        {onDischarge && (
-                                            <button
-                                                onClick={() => onDischarge({ ...patient, ...formData } as Patient)}
-                                                title="Final Discharge"
-                                                className="rounded-lg bg-red-500/10 p-2 text-red-500 hover:bg-red-500/20"
-                                            >
-                                                <FileOutput size={20} />
-                                            </button>
-                                        )}
-
-                                        {onRemove && (
-                                            <button
-                                                onClick={() => onRemove(patient)}
-                                                title="Remove Patient"
-                                                className="rounded-lg bg-gray-500/10 p-2 text-gray-400 hover:bg-gray-500/20 hover:text-white"
-                                            >
-                                                <Trash2 size={20} />
-                                            </button>
-                                        )}
-                                    </>
-                                )}
-                            </div>
-
-                            <div className="flex space-x-2">
-                                {!readOnly && (
-                                    <button
-                                        onClick={handleSave}
+                                        onClick={async () => {
+                                            await handleSave(); // Waits for setIsSaving(false) but our handleSave is void promise...
+                                            // We need handleSave to allow external triggering or just simulate logic here.
+                                            // Re-using internal handleSave logic:
+                                            onSaveAndNext({ ...patient, ...formData, lastPlanUpdate: new Date().toISOString() } as Patient);
+                                        }}
                                         disabled={isSaving}
                                         className="flex items-center space-x-2 rounded-lg bg-primary px-6 py-2 text-sm font-bold text-black shadow-lg shadow-primary/20 hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed"
                                     >
                                         {isSaving ? <Loader2 size={18} className="animate-spin" /> : <Save size={18} />}
-                                        <span>{isSaving ? "Saving..." : "Save"}</span>
+                                        <span>{isSaving ? "Saving..." : "Save & Next"}</span>
                                     </button>
-                                )}
-                            </div>
+                                </div>
+                            ) : (
+                                <>
+                                    <div className="flex space-x-2">
+                                        {/* AI Button */}
+                                        <div className="relative">
+                                            <button
+                                                onClick={() => setIsSearchOpen(true)}
+                                                className={cn(
+                                                    "rounded-lg p-2 transition-colors",
+                                                    isSearchOpen ? "bg-green-500/20 text-green-400" : "bg-green-500/10 text-green-400 hover:bg-green-500/20"
+                                                )}
+                                                title="Search Case Reports (Knowledge Base)"
+                                            >
+                                                <BookOpen size={20} />
+                                            </button>
+
+                                            {/* Copy Button */}
+                                            <button
+                                                onClick={handleCopy}
+                                                className={cn(
+                                                    "rounded-lg p-2 transition-colors",
+                                                    hasCopied ? "bg-blue-500/20 text-blue-400" : "bg-blue-500/10 text-blue-400 hover:bg-blue-500/20"
+                                                )}
+                                                title="Copy Patient Details"
+                                            >
+                                                {hasCopied ? <Check size={20} /> : <Copy size={20} />}
+                                            </button>
+                                        </div>
+
+                                        {!readOnly && (
+                                            <>
+                                                {/* Transfer Button */}
+                                                {onTransfer && consultants && (
+                                                    <div className="relative">
+                                                        <button
+                                                            onClick={() => setIsTransferring(!isTransferring)}
+                                                            title="Transfer Patient"
+                                                            className={cn(
+                                                                "rounded-lg p-2 transition-colors",
+                                                                isTransferring ? "bg-blue-500/20 text-blue-400" : "bg-white/5 text-gray-400 hover:bg-white/10 hover:text-white"
+                                                            )}
+                                                        >
+                                                            <ArrowRightLeft size={20} />
+                                                        </button>
+                                                        {isTransferring && (
+                                                            <div className="absolute bottom-full left-0 mb-2 w-56 rounded-lg border border-white/10 bg-[#1a1a1a] p-2 shadow-xl">
+                                                                <div className="mb-2 text-xs font-medium text-gray-400">Transfer to:</div>
+                                                                <div className="max-h-48 overflow-y-auto space-y-1">
+                                                                    {consultants.map(c => (
+                                                                        <button
+                                                                            key={c}
+                                                                            onClick={() => {
+                                                                                onTransfer(patient, c);
+                                                                                setIsTransferring(false);
+                                                                            }}
+                                                                            className="w-full rounded px-2 py-1 text-left text-xs text-gray-300 hover:bg-white/5 hover:text-white truncate"
+                                                                        >
+                                                                            {c}
+                                                                        </button>
+                                                                    ))}
+                                                                </div>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                )}
+
+                                                <button
+                                                    onClick={toggleDischargeMark}
+                                                    title={formData.status === "marked_for_discharge" ? "Unmark Discharge" : "Mark for Discharge"}
+                                                    className={cn(
+                                                        "rounded-lg p-2 transition-colors",
+                                                        formData.status === "marked_for_discharge"
+                                                            ? "bg-yellow-500/20 text-yellow-500 hover:bg-yellow-500/30"
+                                                            : "bg-white/5 text-gray-400 hover:bg-white/10 hover:text-white"
+                                                    )}
+                                                >
+                                                    <AlertTriangle size={20} />
+                                                </button>
+
+                                                {onDischarge && (
+                                                    <button
+                                                        onClick={() => onDischarge({ ...patient, ...formData } as Patient)}
+                                                        title="Final Discharge"
+                                                        className="rounded-lg bg-red-500/10 p-2 text-red-500 hover:bg-red-500/20"
+                                                    >
+                                                        <FileOutput size={20} />
+                                                    </button>
+                                                )}
+
+                                                {onRemove && (
+                                                    <button
+                                                        onClick={() => onRemove(patient)}
+                                                        title="Remove Patient"
+                                                        className="rounded-lg bg-gray-500/10 p-2 text-gray-400 hover:bg-gray-500/20 hover:text-white"
+                                                    >
+                                                        <Trash2 size={20} />
+                                                    </button>
+                                                )}
+                                            </>
+                                        )}
+                                    </div>
+
+                                    <div className="flex space-x-2">
+                                        {!readOnly && (
+                                            <button
+                                                onClick={handleSave}
+                                                disabled={isSaving}
+                                                className="flex items-center space-x-2 rounded-lg bg-primary px-6 py-2 text-sm font-bold text-black shadow-lg shadow-primary/20 hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed"
+                                            >
+                                                {isSaving ? <Loader2 size={18} className="animate-spin" /> : <Save size={18} />}
+                                                <span>{isSaving ? "Saving..." : "Save"}</span>
+                                            </button>
+                                        )}
+                                    </div>
+                                </>
+                            )}
                         </div>
                     </div>
                 </motion.div>
