@@ -2,7 +2,7 @@
 
 import { Patient } from "@/types";
 import { useState } from "react";
-import { X, Save, Wand2, Code } from "lucide-react";
+import { X, Save, Wand2, Code, RefreshCcw } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { DISCHARGE_PROCEDURE_OPTIONS, ProcedureCategory } from "./dischargeOptions";
 
@@ -11,6 +11,8 @@ interface DischargeFormProps {
     onClose: () => void;
     onConfirmDischarge: (dischargeData: any) => void;
     onSave?: (patientData: Patient) => void;
+    onRevert?: () => void;
+    hideDischargeButton?: boolean;
 }
 
 const HISTORY_SUGGESTIONS = [
@@ -27,52 +29,53 @@ const CLINICAL_SUGGESTIONS = [
     "Distal neurovascular status intact"
 ];
 
-export default function DischargeForm({ patient, onClose, onConfirmDischarge, onSave }: DischargeFormProps) {
+export default function DischargeForm({ patient, onClose, onConfirmDischarge, onSave, onRevert, hideDischargeButton }: DischargeFormProps) {
     const [category, setCategory] = useState<ProcedureCategory | "">("");
     const [isProcedureOpen, setIsProcedureOpen] = useState(false);
 
     const [formData, setFormData] = useState(() => {
         try {
             console.log("Initializing DischargeForm with patient:", patient);
+            const p = patient as any; // Cast for easier access to collection-specific fields
+
             return {
-                programYear: patient.programYear || "",
-                programBlock: "",
-                domain: "Skill",
-                level: patient.level || "",
-                procedureName: "",
-                procedureDescription: "",
-                date: new Date().toISOString().split('T')[0],
-                inPatientId: patient.hospitalNo || "",
-                patientName: patient.name || "",
-                age: (() => {
+                programYear: p.programYear || "",
+                programBlock: p.programBlock || "",
+                domain: p.domain || "Skill",
+                level: p.level || "",
+                procedureName: p.procedureName || "",
+                procedureDescription: p.procedureDescription || "",
+                date: p.date || p.dischargeDate || new Date().toISOString().split('T')[0],
+                inPatientId: p.inPatientId || p.hospitalNo || "",
+                patientName: p.patientName || p.name || "",
+                age: p.age || (() => {
                     try {
-                        return String(patient.ageGender || "").split('/')[0]?.replace(/\D/g, '') || "";
+                        return String(p.ageGender || "").split('/')[0]?.replace(/\D/g, '') || "";
                     } catch (e) { return ""; }
                 })(),
-                address: "",
-                history: patient.history || "",
-                diagnosis: patient.examination || "",
-                investigation: patient.investigation || "",
-                provisionalDiagnosis: patient.diagnosis || "",
-                finalDiagnosis: patient.diagnosis || "",
-                management: (() => {
-                    let mgmt = patient.plan || "";
-                    let proc = patient.procedure || "";
-                    if (Array.isArray(patient.surgeries) && patient.surgeries.length > 0) {
-                        const surgeryText = patient.surgeries.map(s => `${s.procedure} (${s.dop})`).join(", ");
-                        proc = proc ? `${proc}, ${surgeryText}` : surgeryText;
+                address: p.address || "",
+                history: p.history || "",
+                diagnosis: p.diagnosis || p.examination || "", // Support both schemas
+                investigation: p.investigation || "",
+                provisionalDiagnosis: p.provisionalDiagnosis || p.diagnosis || "",
+                finalDiagnosis: p.finalDiagnosis || p.diagnosis || "",
+                management: p.management || (() => {
+                    let mgmt = p.plan || "";
+                    let proc = p.procedure || "";
+                    if (Array.isArray(p.surgeries) && p.surgeries.length > 0) {
+                        const surgeryText = p.surgeries.map((s: any) => `${s.procedure} (${s.dop})`).join(" + ");
+                        proc = proc ? `${proc} + ${surgeryText}` : surgeryText;
                     }
                     if (proc) {
                         mgmt = mgmt ? `Procedure: ${proc}\n\n${mgmt}` : `Procedure: ${proc}`;
                     }
                     return mgmt;
                 })(),
-                followUp: "",
-                submittedTo: [] as string[],
+                followUp: p.followUp || "",
+                submittedTo: p.submittedTo || (p.consultant ? [p.consultant] : ([] as string[])),
             };
         } catch (err) {
             console.error("Error initializing DischargeForm state:", err);
-            // Return safe default
             return {
                 programYear: "", programBlock: "", domain: "Skill", level: "", procedureName: "", procedureDescription: "", date: "", inPatientId: "", patientName: "", age: "", address: "", history: "", diagnosis: "", investigation: "", provisionalDiagnosis: "", finalDiagnosis: "", management: "", followUp: "", submittedTo: []
             };
@@ -102,6 +105,9 @@ export default function DischargeForm({ patient, onClose, onConfirmDischarge, on
             // Map form data back to patient structure where appropriate
             onSave({
                 ...patient,
+                name: formData.patientName,
+                address: formData.address,
+                dischargeDate: formData.date,
                 programYear: formData.programYear,
                 programBlock: formData.programBlock,
                 domain: formData.domain,
@@ -110,7 +116,8 @@ export default function DischargeForm({ patient, onClose, onConfirmDischarge, on
                 examination: formData.diagnosis, // Map "Diagnosis" field (Clinical Findings) back to 'examination'
                 investigation: formData.investigation,
                 diagnosis: formData.finalDiagnosis || formData.provisionalDiagnosis, // Prefer final diagnosis
-                plan: formData.management // Map 'Management' back to 'plan'
+                plan: formData.management, // Map 'Management' back to 'plan'
+                followUp: formData.followUp
             });
             onClose();
         }
@@ -129,95 +136,95 @@ export default function DischargeForm({ patient, onClose, onConfirmDischarge, on
     const handleCopyScript = () => {
         // Generates a script to auto-fill the eLogbook form based on the provided HTML structure
         const script = `
-            (function() {
-                // Iframe Detection: The form is likely inside an iframe
-                var doc = document;
-                var frames = document.getElementsByTagName('iframe');
-                for (var i = 0; i < frames.length; i++) {
-                    try {
-                        if (frames[i].contentDocument && frames[i].contentDocument.getElementById('ProgramYearId')) {
-                            doc = frames[i].contentDocument;
-                            console.log("Found form inside iframe:", frames[i]);
-                            break;
-                        }
-                    } catch (e) { console.warn("Access to iframe denied or error:", e); }
-                }
-
-                function setVal(id, val) {
-                    const el = doc.getElementById(id);
-                    if (el) {
-                        el.value = val;
-                        el.dispatchEvent(new Event('input', { bubbles: true }));
-                        el.dispatchEvent(new Event('change', { bubbles: true }));
-                        
-                        // Handle Chosen / jQuery if present (check both parent and iframe window)
-                        var win = doc.defaultView || window;
-                        if (win.jQuery) {
-                            win.jQuery('#' + id).trigger('chosen:updated');
-                            win.jQuery('#' + id).trigger('change');
-                        }
+        (function() {
+            // Iframe Detection: The form is likely inside an iframe
+            var doc = document;
+            var frames = document.getElementsByTagName('iframe');
+            for (var i = 0; i < frames.length; i++) {
+                try {
+                    if (frames[i].contentDocument && frames[i].contentDocument.getElementById('ProgramYearId')) {
+                        doc = frames[i].contentDocument;
+                        console.log("Found form inside iframe:", frames[i]);
+                        break;
                     }
-                }
+                } catch (e) { console.warn("Access to iframe denied or error:", e); }
+            }
 
-                // --- MAPPING LOGIC ---
-                // Dropdowns with specific Value Mappings
-                const yearMap = { "First": "1", "Second": "2", "Third": "3" };
-                setVal('ProgramYearId', yearMap["${formData.programYear}"] || "");
-
-                const blockMap = { "I": "1", "II": "2", "III": "3", "IV": "4", "V": "5", "VI": "6" };
-                setVal('ProgramBlockId', blockMap["${formData.programBlock}"] || "");
-
-                const domainMap = { "Knowledge": "1", "Skill": "2", "Attitude": "4" };
-                setVal('ProgramDomainId', domainMap["${formData.domain}"] || "2"); 
-
-                const levelMap = { "I": "1", "II": "2", "III": "3", "IV": "4" };
-                setVal('LevelId', levelMap["${formData.level}"] || "");
-
-                // --- TEXT FIELDS ---
-                setVal('ProcedureName', \`${formData.procedureName}\`);
-                setVal('ProcedureDescription', \`${formData.procedureDescription}\`);
-                setVal('Date', '${formData.date}'); 
-                setVal('InPatientId', '${formData.inPatientId}');
-                setVal('PatientName', \`${formData.patientName}\`);
-                setVal('Age', '${formData.age}');
-                setVal('Address', \`${formData.address}\`);
-                setVal('History', \`${formData.history}\`);
-                setVal('Diagnosis', \`${formData.diagnosis}\`); // Clinical Findings
-                setVal('Investigation', \`${formData.investigation}\`);
-                setVal('ProvisionalDiagnosys', \`${formData.provisionalDiagnosis}\`);
-                setVal('FinalDiagnosys', \`${formData.finalDiagnosis}\`);
-                setVal('Management', \`${formData.management}\`);
-                setVal('FollowUp', \`${formData.followUp}\`);
-
-                // --- CONSULTANTS (Multi-select) ---
-                const submittedNames = "${formData.submittedTo.join(",")}".split(",");
-                const submittedSelect = doc.getElementById('SubmittedList');
-                if (submittedSelect && submittedNames.length > 0) {
-                    const valuesToSelect = [];
-                    for (let i = 0; i < submittedSelect.options.length; i++) {
-                        const optText = submittedSelect.options[i].text.toLowerCase();
-                        submittedNames.forEach(name => {
-                            if (name.trim() && optText.includes(name.trim().toLowerCase())) {
-                                valuesToSelect.push(submittedSelect.options[i].value);
-                            }
-                        });
-                    }
+            function setVal(id, val) {
+                const el = doc.getElementById(id);
+                if (el) {
+                    el.value = val;
+                    el.dispatchEvent(new Event('input', { bubbles: true }));
+                    el.dispatchEvent(new Event('change', { bubbles: true }));
                     
-                    if (valuesToSelect.length > 0) {
-                        var win = doc.defaultView || window;
-                        if (win.jQuery) {
-                            win.jQuery('#SubmittedList').val(valuesToSelect).trigger('chosen:updated');
-                        } else {
-                            for (let i = 0; i < submittedSelect.options.length; i++) {
-                                submittedSelect.options[i].selected = valuesToSelect.includes(submittedSelect.options[i].value);
-                            }
-                        }
+                    // Handle Chosen / jQuery if present (check both parent and iframe window)
+                    var win = doc.defaultView || window;
+                    if (win.jQuery) {
+                        win.jQuery('#' + id).trigger('chosen:updated');
+                        win.jQuery('#' + id).trigger('change');
                     }
+                }
+            }
+
+            // --- MAPPING LOGIC ---
+            // Dropdowns with specific Value Mappings
+            const yearMap = { "First": "1", "Second": "2", "Third": "3" };
+            setVal('ProgramYearId', yearMap["${formData.programYear}"] || "");
+
+            const blockMap = { "I": "1", "II": "2", "III": "3", "IV": "4", "V": "5", "VI": "6" };
+            setVal('ProgramBlockId', blockMap["${formData.programBlock}"] || "");
+
+            const domainMap = { "Knowledge": "1", "Skill": "2", "Attitude": "4" };
+            setVal('ProgramDomainId', domainMap["${formData.domain}"] || "2"); 
+
+            const levelMap = { "I": "1", "II": "2", "III": "3", "IV": "4" };
+            setVal('LevelId', levelMap["${formData.level}"] || "");
+
+            // --- TEXT FIELDS ---
+            setVal('ProcedureName', \`${formData.procedureName}\`);
+            setVal('ProcedureDescription', \`${formData.procedureDescription}\`);
+            setVal('Date', '${formData.date.replace(/-/g, "")}'); 
+            setVal('InPatientId', '${formData.inPatientId}');
+            setVal('PatientName', \`${formData.patientName}\`);
+            setVal('Age', '${formData.age}');
+            setVal('Address', \`${formData.address}\`);
+            setVal('History', \`${formData.history}\`);
+            setVal('Diagnosis', \`${formData.diagnosis}\`); // Clinical Findings
+            setVal('Investigation', \`${formData.investigation}\`);
+            setVal('ProvisionalDiagnosys', \`${formData.provisionalDiagnosis}\`);
+            setVal('FinalDiagnosys', \`${formData.finalDiagnosis}\`);
+            setVal('Management', \`${formData.management}\`);
+            setVal('FollowUp', \`${formData.followUp}\`);
+
+            // --- CONSULTANTS (Multi-select) ---
+            const submittedNames = "${formData.submittedTo.join(",")}".split(",");
+            const submittedSelect = doc.getElementById('SubmittedList');
+            if (submittedSelect && submittedNames.length > 0) {
+                const valuesToSelect = [];
+                for (let i = 0; i < submittedSelect.options.length; i++) {
+                    const optText = submittedSelect.options[i].text.toLowerCase();
+                    submittedNames.forEach(name => {
+                        if (name.trim() && optText.includes(name.trim().toLowerCase())) {
+                            valuesToSelect.push(submittedSelect.options[i].value);
+                        }
+                    });
                 }
                 
-                alert('Data Auto-Filled! (Target: ' + (doc === document ? 'Main Page' : 'Iframe') + ')');
-            })();
-        `;
+                if (valuesToSelect.length > 0) {
+                    var win = doc.defaultView || window;
+                    if (win.jQuery) {
+                        win.jQuery('#SubmittedList').val(valuesToSelect).trigger('chosen:updated');
+                    } else {
+                        for (let i = 0; i < submittedSelect.options.length; i++) {
+                            submittedSelect.options[i].selected = valuesToSelect.includes(submittedSelect.options[i].value);
+                        }
+                    }
+                }
+            }
+            
+            alert('Data Auto-Filled! (Target: ' + (doc === document ? 'Main Page' : 'Iframe') + ')');
+        })();
+    `;
         navigator.clipboard.writeText(script);
         alert("Script copied! 1. Go to NBMS. 2. console paste. (Script now auto-detects iframes)");
     };
@@ -256,7 +263,7 @@ export default function DischargeForm({ patient, onClose, onConfirmDischarge, on
             "LevelId": levelMap[formData.level as keyof typeof levelMap] || "",
             "ProcedureName": formData.procedureName,
             "ProcedureDescription": formData.procedureDescription,
-            "Date": formData.date,
+            "Date": formData.date.replace(/-/g, ""),
             "InPatientId": formData.inPatientId,
             "PatientName": formData.patientName,
             "Age": formData.age,
@@ -276,64 +283,64 @@ export default function DischargeForm({ patient, onClose, onConfirmDischarge, on
     };
 
     const BOOKMARKLET_CODE = `javascript:(function(){
-        if(document.getElementById('nbms-filler-overlay'))return;
-        var overlay=document.createElement('div');
-        overlay.id='nbms-filler-overlay';
-        overlay.style.cssText='position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.85);z-index:99999;display:flex;align-items:center;justify-content:center;font-family:sans-serif;';
-        var box=document.createElement('div');
-        box.style.cssText='background:#fff;padding:20px;border-radius:12px;width:90%;max-width:400px;text-align:center;box-shadow:0 10px 25px rgba(0,0,0,0.5);';
-        var title=document.createElement('h3');
-        title.innerText='📋 Paste App Data Here';
-        title.style.margin='0 0 15px 0';title.style.color='#333';
-        var txt=document.createElement('textarea');
-        txt.placeholder='Long press & Paste JSON here...';
-        txt.style.cssText='width:100%;height:120px;padding:10px;border:2px solid #ddd;border-radius:8px;font-size:14px;box-sizing:border-box;margin-bottom:15px;';
-        var btn=document.createElement('button');
-        btn.innerText='✨ Fill Form';
-        btn.style.cssText='width:100%;padding:12px;background:#2563eb;color:#fff;border:none;border-radius:8px;font-size:16px;font-weight:bold;cursor:pointer;';
-        var close=document.createElement('div');
-        close.innerText='Close';
-        close.style.cssText='margin-top:15px;color:#666;font-size:13px;text-decoration:underline;cursor:pointer;';
-        close.onclick=function(){document.body.removeChild(overlay);};
-        box.appendChild(title);box.appendChild(txt);box.appendChild(btn);box.appendChild(close);
-        overlay.appendChild(box);document.body.appendChild(overlay);
-        btn.onclick=function(){
-            var d=txt.value;
-            if(!d){alert('Please paste data first!');return;}
-            try{
-                var j=JSON.parse(d);
-                var doc=document;
-                var frames=document.getElementsByTagName('iframe');
-                var targetFrame=null;
-                for(var i=0;i<frames.length;i++){try{if(frames[i].contentDocument&&frames[i].contentDocument.getElementById('ProgramYearId')){doc=frames[i].contentDocument;targetFrame=frames[i];break;}}catch(e){}}
-                if(!targetFrame&&!doc.getElementById('ProgramYearId')){
-                    if(frames.length>0){
-                        var directUrl=frames[0].src;
-                        if(confirm("⚠️ Browser Security Blocked Access!\\n\\nClick OK to open the form directly, then run this bookmark again.")){window.location.href=directUrl;}
-                    }else{alert("Error: No form found on this page.");}
-                    document.body.removeChild(overlay);return;
-                }
-                var win=doc.defaultView||window;
-                for(var k in j){
-                    var e=doc.getElementById(k);
-                    if(e){
-                        if(k==='SubmittedList'){
-                            var opts=e.options;
-                            for(var z=0;z<opts.length;z++){if(j[k].includes(opts[z].value))opts[z].selected=true;}
-                            if(win.jQuery)win.jQuery('#'+k).trigger('chosen:updated');
-                        }else{
-                            e.value=j[k];
-                            e.dispatchEvent(new Event('input',{bubbles:true}));
-                            e.dispatchEvent(new Event('change',{bubbles:true}));
-                            if(win.jQuery)win.jQuery('#'+k).trigger('chosen:updated');
-                        }
+    if(document.getElementById('nbms-filler-overlay'))return;
+    var overlay=document.createElement('div');
+    overlay.id='nbms-filler-overlay';
+    overlay.style.cssText='position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.85);z-index:99999;display:flex;align-items:center;justify-content:center;font-family:sans-serif;';
+    var box=document.createElement('div');
+    box.style.cssText='background:#fff;padding:20px;border-radius:12px;width:90%;max-width:400px;text-align:center;box-shadow:0 10px 25px rgba(0,0,0,0.5);';
+    var title=document.createElement('h3');
+    title.innerText='📋 Paste App Data Here';
+    title.style.margin='0 0 15px 0';title.style.color='#333';
+    var txt=document.createElement('textarea');
+    txt.placeholder='Long press & Paste JSON here...';
+    txt.style.cssText='width:100%;height:120px;padding:10px;border:2px solid #ddd;border-radius:8px;font-size:14px;box-sizing:border-box;margin-bottom:15px;';
+    var btn=document.createElement('button');
+    btn.innerText='✨ Fill Form';
+    btn.style.cssText='width:100%;padding:12px;background:#2563eb;color:#fff;border:none;border-radius:8px;font-size:16px;font-weight:bold;cursor:pointer;';
+    var close=document.createElement('div');
+    close.innerText='Close';
+    close.style.cssText='margin-top:15px;color:#666;font-size:13px;text-decoration:underline;cursor:pointer;';
+    close.onclick=function(){document.body.removeChild(overlay);};
+    box.appendChild(title);box.appendChild(txt);box.appendChild(btn);box.appendChild(close);
+    overlay.appendChild(box);document.body.appendChild(overlay);
+    btn.onclick=function(){
+        var d=txt.value;
+        if(!d){alert('Please paste data first!');return;}
+        try{
+            var j=JSON.parse(d);
+            var doc=document;
+            var frames=document.getElementsByTagName('iframe');
+            var targetFrame=null;
+            for(var i=0;i<frames.length;i++){try{if(frames[i].contentDocument&&frames[i].contentDocument.getElementById('ProgramYearId')){doc=frames[i].contentDocument;targetFrame=frames[i];break;}}catch(e){}}
+            if(!targetFrame&&!doc.getElementById('ProgramYearId')){
+                if(frames.length>0){
+                    var directUrl=frames[0].src;
+                    if(confirm("⚠️ Browser Security Blocked Access!\\n\\nClick OK to open the form directly, then run this bookmark again.")){window.location.href=directUrl;}
+                }else{alert("Error: No form found on this page.");}
+                document.body.removeChild(overlay);return;
+            }
+            var win=doc.defaultView||window;
+            for(var k in j){
+                var e=doc.getElementById(k);
+                if(e){
+                    if(k==='SubmittedList'){
+                        var opts=e.options;
+                        for(var z=0;z<opts.length;z++){if(j[k].includes(opts[z].value))opts[z].selected=true;}
+                        if(win.jQuery)win.jQuery('#'+k).trigger('chosen:updated');
+                    }else{
+                        e.value=j[k];
+                        e.dispatchEvent(new Event('input',{bubbles:true}));
+                        e.dispatchEvent(new Event('change',{bubbles:true}));
+                        if(win.jQuery)win.jQuery('#'+k).trigger('chosen:updated');
                     }
                 }
-                alert("✅ Data Auto-Filled Successfully!");
-                document.body.removeChild(overlay);
-            }catch(e){alert("Error: "+e.message);}
-        };
-    })();`.replace(/\s+/g, ' ');
+            }
+            alert("✅ Data Auto-Filled Successfully!");
+            document.body.removeChild(overlay);
+        }catch(e){alert("Error: "+e.message);}
+    };
+})();`.replace(/\s+/g, ' ');
 
     const handleOpenNBMS = () => {
         window.open("https://nbms.mec.gov.np/activity", "_blank");
@@ -509,18 +516,37 @@ export default function DischargeForm({ patient, onClose, onConfirmDischarge, on
                 </div>
 
                 <div className="flex-none border-t border-white/10 bg-[#0a0a0a] p-6">
-                    <div className="flex justify-end space-x-4">
-                        <button onClick={onClose} className="px-6 py-2 rounded-lg text-gray-400 hover:text-white font-medium">Cancel</button>
-                        {onSave && (
-                            <button onClick={handleJustSave} className="px-6 py-2 rounded-lg bg-blue-500/10 text-blue-400 font-bold hover:bg-blue-500/20 flex items-center space-x-2">
-                                <Save size={18} />
-                                <span>Save</span>
-                            </button>
-                        )}
-                        <button onClick={handleSubmit} className="px-6 py-2 rounded-lg bg-primary text-black font-bold hover:bg-primary/90 flex items-center space-x-2">
-                            <Save size={18} />
-                            <span>Confirm Discharge & Save</span>
-                        </button>
+                    <div className="flex justify-between items-center">
+                        <div>
+                            {onRevert && (
+                                <button
+                                    onClick={() => {
+                                        if (confirm("Are you sure you want to revert this discharge? The patient will be moved back to the active unit list.")) {
+                                            onRevert();
+                                        }
+                                    }}
+                                    className="px-6 py-2 rounded-lg bg-red-500/10 text-red-500 font-bold hover:bg-red-500/20 flex items-center space-x-2"
+                                >
+                                    <RefreshCcw size={18} />
+                                    <span>Revert Discharge</span>
+                                </button>
+                            )}
+                        </div>
+                        <div className="flex space-x-4">
+                            <button onClick={onClose} className="px-6 py-2 rounded-lg text-gray-400 hover:text-white font-medium">Cancel</button>
+                            {onSave && (
+                                <button onClick={handleJustSave} className="px-6 py-2 rounded-lg bg-blue-500/10 text-blue-400 font-bold hover:bg-blue-500/20 flex items-center space-x-2">
+                                    <Save size={18} />
+                                    <span>Save</span>
+                                </button>
+                            )}
+                            {!hideDischargeButton && (
+                                <button onClick={handleSubmit} className="px-6 py-2 rounded-lg bg-primary text-black font-bold hover:bg-primary/90 flex items-center space-x-2">
+                                    <Save size={18} />
+                                    <span>Confirm Discharge & Save</span>
+                                </button>
+                            )}
+                        </div>
                     </div>
                 </div>
 

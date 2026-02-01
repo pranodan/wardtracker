@@ -8,19 +8,37 @@ import PatientList from "@/components/ward/PatientList";
 import { ArrowLeft } from "lucide-react";
 import { useRouter } from "next/navigation";
 import DischargeForm from "@/components/ward/DischargeForm";
+import { useToast } from "@/components/ui/Toast";
+import { deleteDoc, doc, setDoc } from "firebase/firestore";
 
 export default function DischargesPage() {
     const [discharges, setDischarges] = useState<Patient[]>([]);
     const [loading, setLoading] = useState(true);
     const [selectedDischarge, setSelectedDischarge] = useState<Patient | null>(null);
     const router = useRouter();
+    const { showToast } = useToast();
 
     useEffect(() => {
         const fetchDischarges = async () => {
             try {
                 const q = query(collection(db, "discharges"), orderBy("timestamp", "desc"));
                 const snapshot = await getDocs(q);
-                const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Patient));
+                const data = snapshot.docs.map(doc => {
+                    const d = doc.data() as any;
+                    return {
+                        id: doc.id,
+                        ...d,
+                        // Ensure standard Patient fields are populated from discharge record keys
+                        name: d.patientName || d.name || "",
+                        hospitalNo: d.inPatientId || d.hospitalNo || "",
+                        dischargeDate: d.date || d.dischargeDate || "",
+                        ageGender: d.age ? (d.gender ? `${d.age}/${d.gender}` : `${d.age}`) : (d.ageGender || ""),
+                        address: d.address || "",
+                        examination: d.diagnosis || "", // clinical findings
+                        diagnosis: d.finalDiagnosis || d.provisionalDiagnosis || d.diagnosis || "",
+                        plan: d.management || ""
+                    } as Patient;
+                });
                 setDischarges(data);
             } catch (error) {
                 console.error("Error fetching discharges:", error);
@@ -30,6 +48,31 @@ export default function DischargesPage() {
         };
         fetchDischarges();
     }, []);
+
+    const handleRevert = async () => {
+        if (!selectedDischarge) return;
+
+        try {
+            // 1. Update status in patient_data
+            if (selectedDischarge.hospitalNo) {
+                await setDoc(doc(db, "patient_data", selectedDischarge.hospitalNo), {
+                    status: "admitted"
+                }, { merge: true });
+            }
+
+            // 2. Delete discharge record (selectedDischarge.id is the doc ID in 'discharges' collection)
+            await deleteDoc(doc(db, "discharges", selectedDischarge.id));
+
+            showToast("Discharge reverted successfully! Patient is back in unit list.", "success");
+
+            // 3. Remove from local list
+            setDischarges(prev => prev.filter(p => p.id !== selectedDischarge.id));
+            setSelectedDischarge(null);
+        } catch (error) {
+            console.error("Error reverting discharge:", error);
+            showToast("Failed to revert discharge.", "error");
+        }
+    };
 
     return (
         <main className="min-h-screen bg-background p-4 pb-20">
@@ -58,7 +101,8 @@ export default function DischargesPage() {
                 <DischargeForm
                     patient={selectedDischarge}
                     onClose={() => setSelectedDischarge(null)}
-                    onConfirmDischarge={() => { }} // Read-only mostly, or update if needed
+                    onConfirmDischarge={() => { }} // Read-only mostly
+                    onRevert={handleRevert}
                 />
             )}
         </main>

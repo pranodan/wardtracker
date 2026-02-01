@@ -9,6 +9,7 @@ export interface Patient {
     mobile: string;
     ageGender: string;
     bedNo: string;
+    address?: string;
 
     // Extended data (from Firebase or local state)
     diagnosis?: string;
@@ -31,6 +32,8 @@ export interface Patient {
     programBlock?: string;
     domain?: string;
     level?: string;
+    followUp?: string; // For auto-filling Discharge Form
+    dischargeDate?: string; // For auto-filling Discharge Form
 }
 
 export interface TrackingEntry {

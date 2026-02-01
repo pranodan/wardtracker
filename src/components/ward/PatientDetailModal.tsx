@@ -157,9 +157,9 @@ export default function PatientDetailModal({ patient, onClose, onSave, onDischar
 
     const appendProcedure = (proc: string, isPrimary: boolean) => {
         if (isPrimary) {
-            updateField("procedure", formData.procedure ? `${formData.procedure}, ${proc}` : proc);
+            updateField("procedure", formData.procedure ? `${formData.procedure} + ${proc}` : proc);
         } else {
-            setNewSurgery(prev => ({ ...prev, procedure: prev.procedure ? `${prev.procedure}, ${proc}` : proc }));
+            setNewSurgery(prev => ({ ...prev, procedure: prev.procedure ? `${prev.procedure} + ${proc}` : proc }));
         }
     };
 
@@ -245,7 +245,7 @@ export default function PatientDetailModal({ patient, onClose, onSave, onDischar
         if (report.history) updateField("history", processTemplate(report.history, currentData as Patient));
         if (report.examination) updateField("examination", processTemplate(report.examination, currentData as Patient));
         if (report.investigation) updateField("investigation", processTemplate(report.investigation, currentData as Patient));
-        if (report.procedure) updateField("procedure", report.procedure);
+        if (report.procedure) updateField("procedure", formData.procedure ? `${formData.procedure} + ${report.procedure}` : report.procedure);
 
         setIsSearchOpen(false);
     };

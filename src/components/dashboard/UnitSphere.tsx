@@ -63,6 +63,35 @@ export default function UnitSphere() {
                         </span>
                     </motion.div>
                 ))}
+
+                {/* Archives Button */}
+                <motion.div
+                    whileHover={{ scale: 1.1 }}
+                    whileTap={{ scale: 0.95 }}
+                    animate={{
+                        y: [0, -5, 0],
+                        x: [0, 5, 0, -5, 0],
+                    }}
+                    transition={{
+                        duration: 5,
+                        repeat: Infinity,
+                        ease: "easeInOut",
+                    }}
+                    onClick={() => router.push("/archives")}
+                    className="group relative flex h-32 w-32 cursor-pointer flex-col items-center justify-center rounded-full border-2 border-white/10 bg-black/20 backdrop-blur-md transition-all hover:border-white/50 hover:shadow-[0_0_30px_rgba(0,0,0,0.5)]"
+                    style={{
+                        borderColor: "#94a3b8",
+                        boxShadow: "0 0 10px #94a3b840"
+                    }}
+                >
+                    <div
+                        className="absolute inset-0 rounded-full opacity-20 transition-opacity group-hover:opacity-40"
+                        style={{ backgroundColor: "#94a3b8" }}
+                    />
+                    <span className="z-10 text-center text-xs font-bold text-white drop-shadow-md">
+                        Archives
+                    </span>
+                </motion.div>
             </div>
         </div>
     );
