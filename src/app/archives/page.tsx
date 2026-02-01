@@ -1,12 +1,11 @@
 "use client";
 
 import { useState, useMemo, useEffect } from "react";
-import archiveData from "../../../2081AND2082.json";
 import { format, parse } from "date-fns";
 import { Patient } from "@/types";
 import DischargeForm from "@/components/ward/DischargeForm";
 import { useRouter } from "next/navigation";
-import { Home } from "lucide-react";
+import { Home, Loader2 } from "lucide-react";
 import { motion } from "framer-motion";
 import { useToast } from "@/components/ui/Toast";
 
@@ -18,6 +17,8 @@ export default function ArchivesPage() {
     const [debouncedQuery, setDebouncedQuery] = useState("");
     const [expandedMonths, setExpandedMonths] = useState<Record<string, boolean>>({});
     const [modifiedPatients, setModifiedPatients] = useState<Record<string, Patient>>({});
+    const [filteredData, setFilteredData] = useState<any[]>([]);
+    const [isSearching, setIsSearching] = useState(false);
 
     // Debounce search query
     useEffect(() => {
@@ -26,6 +27,26 @@ export default function ArchivesPage() {
         }, 300); // 300ms debounce as per instruction
         return () => clearTimeout(handler);
     }, [searchQuery]);
+
+    // Fetch filtered data from API
+    useEffect(() => {
+        const fetchResults = async () => {
+            setIsSearching(true);
+            try {
+                const res = await fetch(`/api/archives?q=${encodeURIComponent(debouncedQuery)}`);
+                if (!res.ok) throw new Error("Search failed");
+                const data = await res.json();
+                setFilteredData(data);
+            } catch (err) {
+                console.error("Search error:", err);
+                showToast("Failed to search archives", "error");
+            } finally {
+                setIsSearching(false);
+            }
+        };
+
+        fetchResults();
+    }, [debouncedQuery]);
 
     // Load modifications from localStorage on mount
     useEffect(() => {
@@ -44,26 +65,7 @@ export default function ArchivesPage() {
         }
     }, [modifiedPatients]);
 
-    // Filter data logic
-    const filteredData = useMemo(() => {
-        const data = archiveData as any[];
-        if (!debouncedQuery.trim()) return data;
-
-        const query = debouncedQuery.toLowerCase();
-        // Performance: Filter and limit to top 100 results to prevent freezing
-        const results = [];
-        for (let i = 0; i < data.length; i++) {
-            const item = data[i];
-            if (
-                (item["Patient Name"]?.toLowerCase() || "").includes(query) ||
-                (item["Hospital no"]?.toLowerCase() || "").includes(query)
-            ) {
-                results.push(item);
-                if (results.length >= 100) break; // Hard limit for performance
-            }
-        }
-        return results;
-    }, [debouncedQuery]);
+    // Filter data logic removed - moved to server API
 
     // Group filtered patients by Month of IPDate
     const groupedPatients = useMemo(() => {
