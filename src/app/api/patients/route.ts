@@ -4,12 +4,16 @@ import { Patient } from "@/types";
 
 export async function GET() {
     try {
-        const admittedData = await getSheetData("Scraped!A:I"); // Default admitted sheet
-        const preopData = await getSheetData("SportsPreop!A:Z"); // Elective/Preop sheet
+        const admittedData = await getSheetData("Scraped!A:Z"); // Expanded range
+        const preopData = await getSheetData("SportsPreop!A:Z");
 
         // Helper to find value by fuzzy key (ignoring case and extra spaces)
         const getValue = (row: any, keyPart: string) => {
-            const key = Object.keys(row).find(k => k.toLowerCase().replace(/\s+/g, ' ').includes(keyPart.toLowerCase()));
+            const key = Object.keys(row).find(k => {
+                const normalizedK = k.toLowerCase().trim().replace(/\s+/g, ' ');
+                const normalizedKeyPart = keyPart.toLowerCase().trim().replace(/\s+/g, ' ');
+                return normalizedK === normalizedKeyPart || normalizedK.includes(normalizedKeyPart);
+            });
             const val = key ? row[key] : "";
 
             // Sanitize Excel/Sheet errors
@@ -20,27 +24,43 @@ export async function GET() {
             return val;
         };
 
-        const mapPatient = (row: any, isElective: boolean = false): Patient => ({
-            id: getValue(row, "hospital no") || Math.random().toString(),
-            ipDate: getValue(row, "ip-date") || getValue(row, "date"),
-            hospitalNo: getValue(row, "hospital no") || getValue(row, "mrn"),
-            inPatNo: getValue(row, "inpat no") || getValue(row, "inpatient"),
-            name: getValue(row, "patient name") || getValue(row, "name") || getValue(row, "patient"),
-            department: getValue(row, "department") || getValue(row, "dept"),
-            consultant: getValue(row, "consultant") || getValue(row, "surgeon"),
-            mobile: getValue(row, "contact") || getValue(row, "mobile") || getValue(row, "phone"),
-            ageGender: getValue(row, "age/gender") || (getValue(row, "age") ? `${getValue(row, "age")}${getValue(row, "sex") || getValue(row, "gender") ? `/${getValue(row, "sex") || getValue(row, "gender")}` : ""}` : ""),
-            bedNo: getValue(row, "bed no") || getValue(row, "bed"),
-            diagnosis: getValue(row, "diagnosis"),
-            procedure: getValue(row, "procedure") || getValue(row, "surgery"),
-            npoStatus: getValue(row, "npo status") || getValue(row, "npo") || getValue(row, "remark") || getValue(row, "instruction"),
-            status: isElective ? "elective" : "admitted" as any
-        });
+        const mapPatient = (row: any, isElective: boolean = false): Patient => {
+            // Helper to get value by original column index (if available) or fuzzy key
+            const getVal = (keyPart: string, index?: number) => {
+                if (!isElective && index !== undefined) {
+                    // For 'Scraped' sheet, we can use the raw key if we know its position
+                    // getSheetData returns objects with keys = headers
+                    const keys = Object.keys(row);
+                    if (keys[index]) return row[keys[index]];
+                }
+                return getValue(row, keyPart);
+            };
+
+            return {
+                id: getVal("hospital no", 1) || Math.random().toString(),
+                ipDate: getVal("ip-date", 0), // Specifically index 0 for English date
+                hospitalNo: getVal("hospital no", 1) || getVal("mrn"),
+                inPatNo: getVal("inpat no", 2) || getVal("inpatient"),
+                name: getVal("patient name", 3) || getVal("name") || getVal("patient"),
+                department: getVal("department", 4) || getVal("dept"),
+                consultant: getVal("consultant", 5) || getVal("surgeon"),
+                mobile: getVal("contact", 6) || getVal("mobile") || getVal("phone"),
+                ageGender: getVal("age/gender", 7) || (getValue(row, "age") ? `${getValue(row, "age")}${getValue(row, "sex") || getValue(row, "gender") ? `/${getValue(row, "sex") || getValue(row, "gender")}` : ""}` : ""),
+                bedNo: getVal("bed no", 8) || getVal("bed"),
+                address: getVal("address", 10), // Specifically index 10 for recently added column
+                diagnosis: getValue(row, "diagnosis"),
+                procedure: getValue(row, "procedure") || getValue(row, "surgery"),
+                npoStatus: getValue(row, "npo status") || getValue(row, "npo") || getValue(row, "remark") || getValue(row, "instruction"),
+                status: isElective ? "elective" : "admitted" as any
+            };
+        };
 
         const patients: Patient[] = [
             ...admittedData.map(row => mapPatient(row, false)),
             ...preopData.map(row => mapPatient(row, true))
-        ];
+        ].filter(p => p.hospitalNo || p.name); // Filter out empty rows
+
+        console.log(`API Found: ${admittedData.length} admitted rows, ${preopData.length} preop rows. Filtered to ${patients.length} patients.`);
 
         return NextResponse.json(patients);
     } catch (error) {

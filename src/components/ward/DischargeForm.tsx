@@ -38,13 +38,24 @@ export default function DischargeForm({ patient, onClose, onConfirmDischarge, on
             console.log("Initializing DischargeForm with patient:", patient);
             const p = patient as any; // Cast for easier access to collection-specific fields
 
+            const getCombinedProcedures = () => {
+                let proc = p.procedure || "";
+                if (Array.isArray(p.surgeries) && p.surgeries.length > 0) {
+                    const surgeryText = p.surgeries.map((s: any) => `${s.procedure} (${s.dop})`).join(" + ");
+                    proc = proc ? `${proc} + ${surgeryText}` : surgeryText;
+                }
+                return proc;
+            };
+
+            const combinedProcedures = getCombinedProcedures();
+
             return {
                 programYear: p.programYear || "",
                 programBlock: p.programBlock || "",
                 domain: p.domain || "Skill",
                 level: p.level || "",
                 procedureName: p.procedureName || "",
-                procedureDescription: p.procedureDescription || "",
+                procedureDescription: p.procedureDescription || combinedProcedures,
                 date: p.date || p.dischargeDate || new Date().toISOString().split('T')[0],
                 inPatientId: p.inPatientId || p.hospitalNo || "",
                 patientName: p.patientName || p.name || "",
@@ -55,24 +66,13 @@ export default function DischargeForm({ patient, onClose, onConfirmDischarge, on
                 })(),
                 address: p.address || "",
                 history: p.history || "",
-                diagnosis: p.diagnosis || p.examination || "", // Support both schemas
+                diagnosis: "", // Keep Clinical Examination / Findings blank
                 investigation: p.investigation || "",
                 provisionalDiagnosis: p.provisionalDiagnosis || p.diagnosis || "",
                 finalDiagnosis: p.finalDiagnosis || p.diagnosis || "",
-                management: p.management || (() => {
-                    let mgmt = p.plan || "";
-                    let proc = p.procedure || "";
-                    if (Array.isArray(p.surgeries) && p.surgeries.length > 0) {
-                        const surgeryText = p.surgeries.map((s: any) => `${s.procedure} (${s.dop})`).join(" + ");
-                        proc = proc ? `${proc} + ${surgeryText}` : surgeryText;
-                    }
-                    if (proc) {
-                        mgmt = mgmt ? `Procedure: ${proc}\n\n${mgmt}` : `Procedure: ${proc}`;
-                    }
-                    return mgmt;
-                })(),
-                followUp: p.followUp || "",
-                submittedTo: p.submittedTo || (p.consultant ? [p.consultant] : ([] as string[])),
+                management: p.management || combinedProcedures || p.plan || "",
+                followUp: p.followUp || "2 weeks",
+                submittedTo: p.submittedTo || ["Dr Bibek Baskota"],
             };
         } catch (err) {
             console.error("Error initializing DischargeForm state:", err);

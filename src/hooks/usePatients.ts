@@ -87,6 +87,14 @@ export function usePatients() {
         const mergedData = sheetData.map(p => {
             let patient = { ...p };
 
+            // RE-ADMISSION LOGIC: 
+            // If they are in the sheetData, they are ACTIVE. 
+            // Force status to "admitted" (or elective if already set by mapPatient)
+            // This overrides any stale "discharged" status in Firebase.
+            if (patient.status !== "elective") {
+                patient.status = "admitted";
+            }
+
             // Apply Transfers
             if (transfers[p.hospitalNo]) {
                 patient.consultant = transfers[p.hospitalNo].consultant;
@@ -96,24 +104,29 @@ export function usePatients() {
             if (patientEdits[p.hospitalNo]) {
                 const edit = patientEdits[p.hospitalNo];
 
-                // Fields that ALWAYS come from Sheet (unless missing in Sheet)
-                const LOCKED_FIELDS = ["bedNo", "name", "ageGender", "consultant", "ipDate", "hospitalNo"];
+                // Fields that ALWAYS come from Sheet (census authority)
+                const LOCKED_FIELDS = ["bedNo", "name", "ageGender", "consultant", "ipDate", "hospitalNo", "status"];
 
                 // Only merge fields that are NOT errors AND NOT locked
                 const cleanEdit: any = {};
                 Object.keys(edit).forEach(key => {
                     const val = edit[key];
-                    // Check if value is a "Bad Spreadsheet Value"
                     const isBad = typeof val === "string" && (val.includes("#NAME?") || val.includes("#REF!") || val.includes("#VALUE!") || val.includes("#N/A"));
-
-                    // Check if we should ignore this edit because Sheet has authority
-                    // We only ignore the edit if the Sheet actually provided a value (which it did, because 'p' comes from sheetData)
-                    // Note: If you want Sheet to ALWAYS win even if empty, remove the check.
-                    // Here we let Sheet win.
                     const isLocked = LOCKED_FIELDS.includes(key);
 
                     if (!isBad && !isLocked) {
-                        cleanEdit[key] = val;
+                        // Persist historical data if current sheet has it empty
+                        const currentVal = (patient as any)[key];
+                        const isCurrentEmpty = !currentVal || currentVal === "";
+
+                        if (isCurrentEmpty) {
+                            cleanEdit[key] = val;
+                        } else {
+                            // If current sheet has data, prefer sheet data for major fields
+                            // but maybe keep the edit if it's more descriptive? 
+                            // For now, let sheet win if it provides data.
+                            cleanEdit[key] = currentVal;
+                        }
                     }
                 });
 
@@ -136,31 +149,29 @@ export function usePatients() {
             const savedData = patientEdits[id] || {};
             const transferData = transfers[id];
 
-            // If we have neither saved data nor transfer data, we can't reconstruct the patient
-            // (This shouldn't happen given the key union, but for safety)
             if (!savedData && !transferData) return null;
 
-            // Determine Consultant: Transfer > Saved > "Unknown"
-            // If they have NO consultant, they won't show in any Unit list anyway, but we should create the object.
+            // Determine Consultant
             const persistentConsultant = transferData?.consultant || savedData.consultant || "";
 
             return {
                 id: id,
                 hospitalNo: id,
-                // Spread saved data FIRST
                 ...savedData,
                 name: savedData.name || "Unknown Patient (Left Census)",
                 ageGender: savedData.ageGender || "N/A",
-                bedNo: "", // Ghost patients have no bed in the Census
+                bedNo: "",
                 ipDate: savedData.ipDate || "Unknown",
                 consultant: persistentConsultant,
                 status: savedData.status || "admitted",
-                isGhost: true // Flag for UI
+                isGhost: true
             } as Patient;
         }).filter(Boolean) as Patient[];
 
         const finalData = [...mergedData, ...ghostPatients];
         setPatients(finalData);
+
+        console.log(`Merged ${sheetData.length} from sheet + ${ghostPatients.length} ghosts. Total: ${finalData.length}`);
     }, [sheetData, transfers, patientEdits]);
 
     return { patients, loading, error, refresh: fetchSheetData };
