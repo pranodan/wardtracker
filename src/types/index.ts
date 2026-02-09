@@ -28,6 +28,8 @@ export interface Patient {
     history?: string;
     examination?: string; // Clinical Findings
     investigation?: string;
+    procedureName?: string;
+    procedureDescription?: string;
     programYear?: string;
     programBlock?: string;
     domain?: string;

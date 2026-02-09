@@ -66,7 +66,7 @@ export default function DischargeForm({ patient, onClose, onConfirmDischarge, on
                 })(),
                 address: p.address || "",
                 history: p.history || "",
-                diagnosis: "", // Keep Clinical Examination / Findings blank
+                diagnosis: p.examination || p.diagnosis || "", // Load Clinical Examination / Findings
                 investigation: p.investigation || "",
                 provisionalDiagnosis: p.provisionalDiagnosis || p.diagnosis || "",
                 finalDiagnosis: p.finalDiagnosis || p.diagnosis || "",
@@ -115,6 +115,8 @@ export default function DischargeForm({ patient, onClose, onConfirmDischarge, on
                 history: formData.history, // Map back
                 examination: formData.diagnosis, // Map "Diagnosis" field (Clinical Findings) back to 'examination'
                 investigation: formData.investigation,
+                procedureName: formData.procedureName,
+                procedureDescription: formData.procedureDescription,
                 diagnosis: formData.finalDiagnosis || formData.provisionalDiagnosis, // Prefer final diagnosis
                 plan: formData.management, // Map 'Management' back to 'plan'
                 followUp: formData.followUp

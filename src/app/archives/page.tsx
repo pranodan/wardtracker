@@ -134,14 +134,21 @@ export default function ArchivesPage() {
             ageGender: item["Age/Gender"],
             bedNo: item["Bed No"],
             address: item["Address"],
+            history: item["History"] || item["history"] || "",
+            examination: item["Examination"] || item["examination"] || item["Clinical Findings"] || "",
+            investigation: item["Investigation"] || item["investigation"] || "",
+            procedureName: item["Procedure Name"] || item["procedureName"] || "",
+            procedureDescription: item["Procedure Description"] || item["procedureDescription"] || "",
+            diagnosis: item["Diagnosis"] || item["diagnosis"] || "",
+            plan: item["Management"] || item["management"] || item["Plan"] || "",
 
             // Auto-fill requirements
             dischargeDate: formDate, // Mapped to 'Date' in DischargeForm
-            followUp: "2 weeks",
-            programYear: "Third",
-            programBlock: "V",
-            domain: "Skill",
-            level: "III"
+            followUp: item["FollowUp"] || "2 weeks",
+            programYear: item["ProgramYear"] || "Third",
+            programBlock: item["ProgramBlock"] || "V",
+            domain: item["Domain"] || "Skill",
+            level: item["Level"] || "III"
         };
         setSelectedPatient(patient);
     };
