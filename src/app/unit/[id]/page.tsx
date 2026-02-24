@@ -63,18 +63,7 @@ export default function UnitPage() {
             const today = startOfDay(new Date());
 
             // Use 'patients' directly since 'filtered' excludes 'elective'
-            return patients.filter(p => p.status === "elective").filter(p => {
-                if (!p.ipDate) return false;
-                let d = parseISO(p.ipDate);
-                if (isNaN(d.getTime())) {
-                    d = new Date(p.ipDate); // Try standard constructor
-                }
-                if (isNaN(d.getTime())) return false; // Skip invalid dates
-
-                const diff = differenceInDays(d, today);
-                // Allow Future (diff > 0), Today (diff == 0), Past up to 7 days (diff >= -7)
-                return diff >= -7;
-            }).sort((a, b) => {
+            return patients.filter(p => p.status === "elective").sort((a, b) => {
                 const dateA = a.ipDate ? parseISO(a.ipDate) : new Date(0);
                 const dateB = b.ipDate ? parseISO(b.ipDate) : new Date(0);
 

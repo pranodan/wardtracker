@@ -38,7 +38,7 @@ export async function GET() {
 
             return {
                 id: getVal("hospital no", 1) || Math.random().toString(),
-                ipDate: getVal("ip-date", 0), // Specifically index 0 for English date
+                ipDate: getVal("ip-date", 0) || getVal("date of surgery") || getVal("surgery date") || getVal("date"), // Added surgery date fallbacks
                 hospitalNo: getVal("hospital no", 1) || getVal("mrn"),
                 inPatNo: getVal("inpat no", 2) || getVal("inpatient"),
                 name: getVal("patient name", 3) || getVal("name") || getVal("patient"),
