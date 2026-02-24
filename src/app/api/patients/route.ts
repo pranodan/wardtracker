@@ -24,6 +24,37 @@ export async function GET() {
             return val;
         };
 
+        // Normalize date strings from mixed formats (M/D/YYYY, DD/MM/YYYY, YYYY/MM/DD) to YYYY-MM-DD
+        const normalizeDate = (dateStr: string): string => {
+            if (!dateStr || typeof dateStr !== "string") return "";
+            const trimmed = dateStr.trim();
+            if (!trimmed) return "";
+
+            // Already ISO format (YYYY-MM-DD)?
+            if (/^\d{4}-\d{2}-\d{2}/.test(trimmed)) return trimmed.substring(0, 10);
+
+            // Nepali calendar dates (e.g. 2082/10/18) - year > 2050
+            const slashParts = trimmed.split("/");
+            if (slashParts.length === 3) {
+                const [p1, p2, p3] = slashParts.map(s => parseInt(s, 10));
+
+                // YYYY/MM/DD format (Nepali dates: year > 2050)
+                if (p1 > 2050) {
+                    return `${p1}-${String(p2).padStart(2, "0")}-${String(p3).padStart(2, "0")}`;
+                }
+
+                // If first part > 12, it must be DD/MM/YYYY
+                if (p1 > 12) {
+                    return `${p3}-${String(p2).padStart(2, "0")}-${String(p1).padStart(2, "0")}`;
+                }
+
+                // Otherwise treat as M/D/YYYY (US format - common in Google Sheets)
+                return `${p3}-${String(p1).padStart(2, "0")}-${String(p2).padStart(2, "0")}`;
+            }
+
+            return trimmed; // Return as-is if unrecognized
+        };
+
         const mapPatient = (row: any, isElective: boolean = false): Patient => {
             // Helper to get value by original column index (if available) or fuzzy key
             const getVal = (keyPart: string, index?: number) => {
@@ -36,9 +67,11 @@ export async function GET() {
                 return getValue(row, keyPart);
             };
 
+            const rawDate = getVal("ip-date", 0) || getVal("date of surgery") || getVal("surgery date") || getVal("date");
+
             return {
                 id: getVal("hospital no", 1) || Math.random().toString(),
-                ipDate: getVal("ip-date", 0) || getVal("date of surgery") || getVal("surgery date") || getVal("date"), // Added surgery date fallbacks
+                ipDate: normalizeDate(rawDate),
                 hospitalNo: getVal("hospital no", 1) || getVal("mrn"),
                 inPatNo: getVal("inpat no", 2) || getVal("inpatient"),
                 name: getVal("patient name", 3) || getVal("name") || getVal("patient"),
