@@ -8,6 +8,8 @@ import { useRouter } from "next/navigation";
 import { Home, Loader2 } from "lucide-react";
 import { motion } from "framer-motion";
 import { useToast } from "@/components/ui/Toast";
+import { db } from "@/lib/firebase";
+import { doc, getDoc } from "firebase/firestore";
 
 export default function ArchivesPage() {
     const router = useRouter();
@@ -98,7 +100,7 @@ export default function ArchivesPage() {
         });
     }, [filteredData]);
 
-    const handlePatientClick = (item: any) => {
+    const handlePatientClick = async (item: any) => {
         const hospitalNo = item["Hospital no"];
 
         // Check if we have modified this patient in the current session
@@ -122,7 +124,7 @@ export default function ArchivesPage() {
             console.error(e);
         }
 
-        const patient: Patient = {
+        let patient: Patient = {
             id: item["Hospital no"],
             hospitalNo: item["Hospital no"],
             ipDate: item["IPDate"],
@@ -150,6 +152,40 @@ export default function ArchivesPage() {
             domain: item["Domain"] || "Skill",
             level: item["Level"] || "III"
         };
+
+        // ENHANCEMENT: Try to fetch richer data from Firestore (patient_data collection)
+        try {
+            const docRef = doc(db, "patient_data", hospitalNo);
+            const docSnap = await getDoc(docRef);
+
+            if (docSnap.exists()) {
+                const fsData = docSnap.data();
+                console.log("Found enrichment data in Firestore for:", hospitalNo);
+
+                // Merge clinical fields if they are truthy and not already more detailed in JSON
+                // Priority: Firestore data usually contains the actual managed findings from the ward
+                patient = {
+                    ...patient,
+                    history: fsData.history || patient.history,
+                    examination: fsData.examination || patient.examination,
+                    investigation: fsData.investigation || patient.investigation,
+                    procedureName: fsData.procedureName || patient.procedureName,
+                    procedureDescription: fsData.procedureDescription || patient.procedureDescription,
+                    diagnosis: fsData.diagnosis || patient.diagnosis,
+                    plan: fsData.plan || patient.plan,
+                    address: fsData.address || patient.address,
+                    // Preserve BS dates if JSON has them, but allow Firestore to provide better defaults if JSON is missing them
+                    programYear: fsData.programYear || patient.programYear,
+                    programBlock: fsData.programBlock || patient.programBlock,
+                    domain: fsData.domain || patient.domain,
+                    level: fsData.level || patient.level,
+                };
+            }
+        } catch (error) {
+            console.warn("Firestore enrichment failed for archive patient:", error);
+            // Non-blocking: continue with base patient data
+        }
+
         setSelectedPatient(patient);
     };
 
