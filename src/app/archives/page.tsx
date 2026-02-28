@@ -11,6 +11,23 @@ import { useToast } from "@/components/ui/Toast";
 import { db } from "@/lib/firebase";
 import { doc, getDoc } from "firebase/firestore";
 
+const DATE_FORMATS = ["M/d/yy", "yyyy/MM/dd", "yyyy-MM-dd"];
+
+function parseArchiveDate(dateStr: string): Date | null {
+    if (!dateStr) return null;
+    for (const fmt of DATE_FORMATS) {
+        try {
+            const parsed = parse(dateStr, fmt, new Date());
+            if (!isNaN(parsed.getTime())) return parsed;
+        } catch (e) {
+            // Continue to next format
+        }
+    }
+    // Try native Date as fallback for standard ISO strings
+    const native = new Date(dateStr);
+    return isNaN(native.getTime()) ? null : native;
+}
+
 export default function ArchivesPage() {
     const router = useRouter();
     const { showToast } = useToast();
@@ -74,28 +91,25 @@ export default function ArchivesPage() {
         const groups: Record<string, any[]> = {};
 
         filteredData.forEach((item: any) => {
-            try {
-                // IPDate format example: "5/1/24" (M/D/YY)
-                // Use 1st column (IPDate) as requested
-                // Fix Date parsing for IPDate (M/D/YY to YYYY-MM-DD)
-                const date = parse(item.IPDate, "M/d/yy", new Date());
-                if (isNaN(date.getTime())) return;
+            const date = parseArchiveDate(item.IPDate);
+            if (!date) return;
 
+            try {
                 const key = format(date, "MMMM yyyy");
                 if (!groups[key]) {
                     groups[key] = [];
                 }
                 groups[key].push(item);
             } catch (e) {
-                console.error("Error parsing date for item:", item, e);
+                console.error("Error formatting date for item:", item, e);
             }
         });
 
         // Sort keys chronologically
         return Object.entries(groups).sort((a, b) => {
-            // Fix Date parsing for IPDate (M/D/YY to YYYY-MM-DD)
-            const dateA = parse(a[1][0].IPDate, "M/d/yy", new Date());
-            const dateB = parse(b[1][0].IPDate, "M/d/yy", new Date());
+            const dateA = parseArchiveDate(a[1][0].IPDate);
+            const dateB = parseArchiveDate(b[1][0].IPDate);
+            if (!dateA || !dateB) return 0;
             return dateB.getTime() - dateA.getTime(); // Descending (Newest first)
         });
     }, [filteredData]);
@@ -115,8 +129,8 @@ export default function ArchivesPage() {
         let formDate = "";
         try {
             if (item["IPDate"]) {
-                const date = parse(item.IPDate, "M/d/yy", new Date()); // Use parse for robustness
-                if (!isNaN(date.getTime())) {
+                const date = parseArchiveDate(item.IPDate);
+                if (date) {
                     formDate = format(date, "yyyy-MM-dd");
                 }
             }
