@@ -12,13 +12,14 @@ import PatientSummaryModal from "@/components/ward/PatientSummaryModal";
 import ElectiveDetailModal from "@/components/ward/ElectiveDetailModal";
 import DischargeForm from "@/components/ward/DischargeForm";
 import { sortPatientsByBed } from "@/utils/bedGrouping";
-import { Users, Bed, List, Map, FileOutput, RefreshCcw, Home } from "lucide-react";
+import { Users, Bed, List, Map, FileOutput, RefreshCcw, Home, X, Plus, Key } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { db } from "@/lib/firebase";
-import { collection, addDoc, query, where, getDocs, deleteDoc, setDoc, doc } from "firebase/firestore";
+import { collection, addDoc, query, where, getDocs, deleteDoc, setDoc, doc, onSnapshot } from "firebase/firestore";
 import { useToast } from "@/components/ui/Toast";
 import ViewSwitcher, { ViewMode } from "@/components/ward/ViewSwitcher";
 import { useBedGrouping } from "@/hooks/useBedGrouping";
+import { useEffect } from "react";
 
 export default function UnitPage() {
     const params = useParams();
@@ -31,22 +32,54 @@ export default function UnitPage() {
     const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
     const [dischargingPatient, setDischargingPatient] = useState<Patient | null>(null);
     const [collapsedConsultants, setCollapsedConsultants] = useState<Record<string, boolean>>({});
+    const [dynamicConsultants, setDynamicConsultants] = useState<string[]>([]);
+    const [allConsultants, setAllConsultants] = useState<string[]>([]);
+    const [showSelector, setShowSelector] = useState(false);
+    const [removingConsultant, setRemovingConsultant] = useState<string | null>(null);
+    const [passwordInput, setPasswordInput] = useState("");
+    const [showPasswordModal, setShowPasswordModal] = useState(false);
     const { showToast } = useToast();
+
+    // Fetch dynamic consultants for this unit from Firestore
+    useEffect(() => {
+        if (!unitId) return;
+        const docRef = doc(db, "unit_settings", unitId.toString());
+        const unsubscribe = onSnapshot(docRef, (docSnap) => {
+            if (docSnap.exists()) {
+                const data = docSnap.data();
+                if (data.consultants) {
+                    setDynamicConsultants(data.consultants);
+                } else if (unit) {
+                    setDynamicConsultants(unit.consultants);
+                }
+            } else if (unit) {
+                // Initialize with defaults if not set
+                setDynamicConsultants(unit.consultants);
+            }
+        });
+        return () => unsubscribe();
+    }, [unitId, unit]);
+
+    // Extract all unique consultants from ALL patients (Main List)
+    useEffect(() => {
+        if (patients.length > 0) {
+            const unique = Array.from(new Set(patients.map(p => p.consultant?.trim()).filter(Boolean)));
+            setAllConsultants(unique.sort((a, b) => a.localeCompare(b)));
+        }
+    }, [patients]);
 
     // Fetch dynamic bed grouping
     const { groups, loading: groupsLoading } = useBedGrouping(unitId);
 
     // Calculate total patients for this unit (regardless of active tab)
     const unitTotalPatients = useMemo(() => {
-        if (!unit) return 0;
+        if (!unit || dynamicConsultants.length === 0) return 0;
         return patients.filter(p => {
-            // Filter out discharged and elective patients
             if (p.status === "discharged" || p.status === "elective") return false;
-
-            const patientConsultant = p.consultant?.toLowerCase() || "";
-            return unit.consultants.some(c => patientConsultant.includes(c.toLowerCase()));
+            const patientConsultant = p.consultant?.trim().toLowerCase() || "";
+            return dynamicConsultants.some(c => patientConsultant === c.trim().toLowerCase());
         }).length;
-    }, [patients, unit]);
+    }, [patients, unit, dynamicConsultants]);
 
     // Filter and Sort Patients
     const displayedPatients = useMemo(() => {
@@ -100,8 +133,8 @@ export default function UnitPage() {
 
         if (activeTab === "unit" || activeTab === "consultant") {
             filtered = filtered.filter((p) => {
-                const patientConsultant = p.consultant?.toLowerCase() || "";
-                return unit.consultants.some(c => patientConsultant.includes(c.toLowerCase()));
+                const patientConsultant = p.consultant?.trim().toLowerCase() || "";
+                return dynamicConsultants.some(c => patientConsultant === c.trim().toLowerCase());
             });
 
             if (activeTab === "unit" || activeTab === "consultant") {
@@ -125,7 +158,47 @@ export default function UnitPage() {
         }
 
         return filtered;
-    }, [patients, activeTab, unit, groups]);
+    }, [patients, activeTab, unit, groups, dynamicConsultants]);
+
+    const handleAddConsultant = async (consultant: string) => {
+        if (dynamicConsultants.includes(consultant)) return;
+        try {
+            const newConsultants = [...dynamicConsultants, consultant];
+            await setDoc(doc(db, "unit_settings", unitId.toString()), {
+                consultants: newConsultants
+            }, { merge: true });
+            showToast(`Added ${consultant} to unit.`, "success");
+            setShowSelector(false);
+        } catch (err) {
+            console.error(err);
+            showToast("Failed to add consultant.", "error");
+        }
+    };
+
+    const handleRemoveConsultantRequest = (consultant: string) => {
+        setRemovingConsultant(consultant);
+        setShowPasswordModal(true);
+    };
+
+    const handleConfirmRemove = async () => {
+        if (passwordInput === "Pranodan124") {
+            try {
+                const newConsultants = dynamicConsultants.filter(c => c !== removingConsultant);
+                await setDoc(doc(db, "unit_settings", unitId.toString()), {
+                    consultants: newConsultants
+                }, { merge: true });
+                showToast(`Removed ${removingConsultant} from unit.`, "success");
+                setShowPasswordModal(false);
+                setRemovingConsultant(null);
+                setPasswordInput("");
+            } catch (err) {
+                console.error(err);
+                showToast("Failed to remove consultant.", "error");
+            }
+        } else {
+            showToast("Invalid password.", "error");
+        }
+    };
 
     const handlePatientClick = (patient: Patient) => {
         setSelectedPatient(patient);
@@ -281,6 +354,108 @@ export default function UnitPage() {
                 </div>
             </div>
 
+            {/* Consultant Selection Bar */}
+            <div className="mx-4 mt-4 flex flex-wrap items-center gap-2">
+                {dynamicConsultants.map((c) => (
+                    <div key={c} className="flex items-center space-x-1 rounded-full bg-primary/10 border border-primary/20 px-3 py-1 text-xs font-semibold text-primary group">
+                        <span>{c}</span>
+                        <button
+                            onClick={() => handleRemoveConsultantRequest(c)}
+                            className="ml-1 text-primary/40 hover:text-red-500 transition-colors"
+                        >
+                            <X size={14} />
+                        </button>
+                    </div>
+                ))}
+                
+                <div className="relative">
+                    <button
+                        onClick={() => setShowSelector(!showSelector)}
+                        className="flex items-center space-x-1 rounded-full bg-white/5 border border-white/10 px-3 py-1 text-xs font-medium text-gray-400 hover:bg-white/10 hover:text-white transition-all"
+                    >
+                        <Plus size={14} />
+                        <span>Add Consultant</span>
+                    </button>
+
+                    {showSelector && (
+                        <div className="absolute top-full left-0 mt-2 z-50 w-64 max-h-60 overflow-y-auto rounded-xl bg-gray-900 border border-white/10 shadow-2xl p-2 animate-in fade-in slide-in-from-top-2">
+                            <div className="sticky top-0 bg-gray-900 pb-2 border-b border-white/10 mb-2">
+                                <input
+                                    type="text"
+                                    placeholder="Search consultants..."
+                                    className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-xs text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-primary"
+                                    autoFocus
+                                    onChange={(e) => {
+                                        const term = e.target.value.toLowerCase();
+                                        const items = document.querySelectorAll('.consultant-item');
+                                        items.forEach((item: any) => {
+                                            if (item.textContent.toLowerCase().includes(term)) {
+                                                item.style.display = 'flex';
+                                            } else {
+                                                item.style.display = 'none';
+                                            }
+                                        });
+                                    }}
+                                />
+                            </div>
+                            <div className="space-y-1">
+                                {allConsultants.filter(c => !dynamicConsultants.includes(c)).map(c => (
+                                    <button
+                                        key={c}
+                                        onClick={() => handleAddConsultant(c)}
+                                        className="consultant-item w-full flex items-center px-3 py-2 text-left text-xs text-gray-300 hover:bg-white/10 hover:text-white rounded-lg transition-colors"
+                                    >
+                                        {c}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+                </div>
+            </div>
+
+            {/* Password Modal */}
+            {showPasswordModal && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in">
+                    <div className="w-full max-w-sm glass border border-white/10 rounded-2xl shadow-2xl p-6 space-y-4">
+                        <div className="flex items-center space-x-3 text-red-400">
+                            <Key size={20} />
+                            <h3 className="text-sm font-semibold uppercase tracking-wider">Authentication Required</h3>
+                        </div>
+                        <p className="text-xs text-gray-400">
+                            To remove <span className="text-white font-medium">{removingConsultant}</span>, please enter the administrative password.
+                        </p>
+                        <input
+                            type="password"
+                            value={passwordInput}
+                            onChange={(e) => setPasswordInput(e.target.value)}
+                            className="w-full bg-white/5 border border-white/20 rounded-xl px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all font-mono"
+                            placeholder="Enter password"
+                            autoFocus
+                            onKeyDown={(e) => e.key === 'Enter' && handleConfirmRemove()}
+                        />
+                        <div className="flex space-x-3 pt-2">
+                            <button
+                                onClick={() => {
+                                    setShowPasswordModal(false);
+                                    setRemovingConsultant(null);
+                                    setPasswordInput("");
+                                }}
+                                className="flex-1 px-4 py-2.5 rounded-xl border border-white/10 text-xs font-semibold text-gray-400 hover:bg-white/5 hover:text-white transition-all"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={handleConfirmRemove}
+                                className="flex-1 px-4 py-2.5 rounded-xl bg-red-600/20 text-red-500 text-xs font-semibold border border-red-500/20 hover:bg-red-600/30 hover:border-red-500/30 transition-all"
+                            >
+                                Confirm Removal
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {/* Content */}
             <div className="p-4">
                 {loading ? (
@@ -299,7 +474,7 @@ export default function UnitPage() {
                                 onUpdatePatient={handleSavePatient}
                                 onDischargePatient={handleDischargeClick}
                                 onTransferPatient={handleTransfer}
-                                consultants={unit.consultants}
+                                consultants={dynamicConsultants}
                                 onRemovePatient={handleRemove}
                                 groups={groups}
                                 showConsultantInitials={true}
@@ -318,13 +493,12 @@ export default function UnitPage() {
                                 onPatientClick={handlePatientClick}
                                 readOnly={true}
                                 groupByDate={true}
-                                highlightConsultants={unit.consultants}
+                                highlightConsultants={dynamicConsultants}
                                 viewMode={viewMode === "cards" ? "calendar" : viewMode} // Default Main List to Calendar if cards
-                                // unitId={unitId} // Removed to force CalendarView instead of GalleryView
                                 onUpdatePatient={handleSavePatient}
                                 onDischargePatient={handleDischargeClick}
                                 onTransferPatient={handleTransfer}
-                                consultants={unit.consultants}
+                                consultants={dynamicConsultants}
                                 onRemovePatient={handleRemove}
                                 groups={groups}
                                 showConsultantInitials={true}
@@ -337,7 +511,7 @@ export default function UnitPage() {
                                     <span className="text-xs text-gray-600">|</span>
                                     <button
                                         onClick={() => {
-                                            const allCollapsed = unit.consultants.reduce((acc, c) => ({ ...acc, [c]: true }), {});
+                                            const allCollapsed = dynamicConsultants.reduce((acc, c) => ({ ...acc, [c]: true }), {});
                                             setCollapsedConsultants(allCollapsed);
                                         }}
                                         className="text-xs text-primary hover:text-primary/80"
@@ -345,9 +519,9 @@ export default function UnitPage() {
                                         Collapse All
                                     </button>
                                 </div>
-                                {unit.consultants.map((consultant) => {
+                                {dynamicConsultants.map((consultant) => {
                                     const consultantPatients = displayedPatients.filter(p =>
-                                        p.consultant?.toLowerCase().includes(consultant.toLowerCase())
+                                        p.consultant?.trim().toLowerCase() === consultant.trim().toLowerCase()
                                     );
                                     if (consultantPatients.length === 0) return null;
                                     return (
@@ -364,12 +538,8 @@ export default function UnitPage() {
                                                     [consultant]: !prev[consultant]
                                                 }));
                                             }}
-                                            viewMode={viewMode === "cards" ? "grid" : viewMode} // Default Consultant to Grid if cards
-                                            unitId={unitId}
-                                            onUpdatePatient={handleSavePatient}
-                                            onDischargePatient={handleDischargeClick}
                                             onTransferPatient={handleTransfer}
-                                            consultants={unit.consultants}
+                                            consultants={dynamicConsultants}
                                             onRemovePatient={handleRemove}
                                             groups={groups}
                                             enableBulkCopy={true}
@@ -393,7 +563,7 @@ export default function UnitPage() {
                         patient={selectedPatient}
                         onClose={() => setSelectedPatient(null)}
                         onTransfer={handleTransfer}
-                        consultants={unit.consultants}
+                        consultants={dynamicConsultants}
                     />
                 ) : (
                     <PatientDetailModal
@@ -403,7 +573,7 @@ export default function UnitPage() {
                         onDischarge={handleDischargeClick}
                         readOnly={false}
                         onTransfer={handleTransfer}
-                        consultants={unit.consultants}
+                        consultants={dynamicConsultants}
                         onRemove={activeTab === "unit" ? handleRemove : undefined}
                     />
                 )

@@ -9,11 +9,17 @@ export async function GET() {
 
         // Helper to find value by fuzzy key (ignoring case and extra spaces)
         const getValue = (row: any, keyPart: string) => {
-            const key = Object.keys(row).find(k => {
-                const normalizedK = k.toLowerCase().trim().replace(/\s+/g, ' ');
-                const normalizedKeyPart = keyPart.toLowerCase().trim().replace(/\s+/g, ' ');
-                return normalizedK === normalizedKeyPart || normalizedK.includes(normalizedKeyPart);
-            });
+            const keys = Object.keys(row);
+            const normalizedTarget = keyPart.toLowerCase().trim().replace(/\s+/g, ' ');
+            
+            // Try exact match first
+            let key = keys.find(k => k.toLowerCase().trim().replace(/\s+/g, ' ') === normalizedTarget);
+            
+            // Fallback to fuzzy match (includes) if no exact match
+            if (!key) {
+                key = keys.find(k => k.toLowerCase().trim().replace(/\s+/g, ' ').includes(normalizedTarget));
+            }
+            
             const val = key ? row[key] : "";
 
             // Sanitize Excel/Sheet errors
