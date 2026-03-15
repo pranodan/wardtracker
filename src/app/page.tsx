@@ -16,7 +16,7 @@ export default function Home() {
           </h1>
         </div>
 
-        <div className="w-full max-w-md">
+        <div className="w-full max-w-6xl px-4">
           <UnitSphere />
         </div>
       </div>

@@ -104,8 +104,8 @@ export default function UnitPage() {
                 return unit.consultants.some(c => patientConsultant.includes(c.toLowerCase()));
             });
 
-            if (activeTab === "unit") {
-                // Only sort by bed in Unit view
+            if (activeTab === "unit" || activeTab === "consultant") {
+                // Sort by bed in both Unit and Consultant views
                 return sortPatientsByBed(filtered, groups);
             }
             return filtered;

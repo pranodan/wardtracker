@@ -2,7 +2,7 @@
 
 import { Patient } from "@/types";
 import { useState } from "react";
-import { X, Save, Wand2, Code, RefreshCcw } from "lucide-react";
+import { X, Save, Wand2, Code, RefreshCcw, ChevronUp, ChevronDown } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { DISCHARGE_PROCEDURE_OPTIONS, ProcedureCategory } from "./dischargeOptions";
 
@@ -15,29 +15,61 @@ interface DischargeFormProps {
     hideDischargeButton?: boolean;
 }
 
-const HISTORY_SUGGESTIONS = [
-    "History of fall from height",
-    "History of RTA",
-    "History of slip and fall",
-    "Complaints of pain and swelling"
-];
+const SIDE_OPTIONS = ["Right", "Left", "Bilateral", "Blank"];
+const BODY_PART_OPTIONS = ["shoulder", "arm", "forearm", "elbow", "wrist", "hand", "thigh", "knee", "leg", "ankle", "foot", "neck", "upper back", "mid back", "lower back", "pelvic region"];
 
 const CLINICAL_SUGGESTIONS = [
-    "Tenderness present",
+    "Neurology intact",
     "Swelling present",
+    "Tenderness present",
+    "DNVS intact",
     "ROM restricted",
     "Distal neurovascular status intact"
+];
+
+const ACADEMIC_COMBINATIONS = [
+    { year: "First", block: "I", level: "I" },
+    { year: "First", block: "I", level: "II" },
+    { year: "First", block: "I", level: "III" },
+    { year: "First", block: "I", level: "IV" },
+    { year: "First", block: "II", level: "I" },
+    { year: "First", block: "II", level: "II" },
+    { year: "First", block: "II", level: "III" },
+    { year: "First", block: "II", level: "IV" },
+    { year: "Second", block: "III", level: "I" },
+    { year: "Second", block: "III", level: "II" },
+    { year: "Second", block: "III", level: "III" },
+    { year: "Second", block: "III", level: "IV" },
+    { year: "Second", block: "IV", level: "I" },
+    { year: "Second", block: "IV", level: "II" },
+    { year: "Second", block: "IV", level: "III" },
+    { year: "Second", block: "IV", level: "IV" },
+    { year: "Third", block: "V", level: "I" },
+    { year: "Third", block: "V", level: "II" },
+    { year: "Third", block: "V", level: "III" },
+    { year: "Third", block: "V", level: "IV" },
+    { year: "Third", block: "VI", level: "I" },
+    { year: "Third", block: "VI", level: "II" },
+    { year: "Third", block: "VI", level: "III" },
+    { year: "Third", block: "VI", level: "IV" },
 ];
 
 export default function DischargeForm({ patient, onClose, onConfirmDischarge, onSave, onRevert, hideDischargeButton }: DischargeFormProps) {
     const [category, setCategory] = useState<ProcedureCategory | "">("");
     const [isProcedureOpen, setIsProcedureOpen] = useState(false);
+    const [side, setSide] = useState("Blank");
+    const [bodyPart, setBodyPart] = useState("shoulder");
+    const [academicPresets, setAcademicPresets] = useState(() => {
+        try {
+            const saved = localStorage.getItem("discharge_academic_order");
+            return saved ? JSON.parse(saved) : ACADEMIC_COMBINATIONS;
+        } catch (e) { return ACADEMIC_COMBINATIONS; }
+    });
+    const [isAcademicOpen, setIsAcademicOpen] = useState(false);
 
     const [formData, setFormData] = useState(() => {
         try {
-            console.log("Initializing DischargeForm with patient:", patient);
-            const p = patient as any; // Cast for easier access to collection-specific fields
-
+            const p = patient as any;
             const getCombinedProcedures = () => {
                 let proc = p.procedure || "";
                 if (Array.isArray(p.surgeries) && p.surgeries.length > 0) {
@@ -46,14 +78,19 @@ export default function DischargeForm({ patient, onClose, onConfirmDischarge, on
                 }
                 return proc;
             };
-
             const combinedProcedures = getCombinedProcedures();
+            const lastSelection = (() => {
+                try {
+                    const saved = localStorage.getItem("last_discharge_academic");
+                    return saved ? JSON.parse(saved) : null;
+                } catch (e) { return null; }
+            })();
 
             return {
-                programYear: p.programYear || "",
-                programBlock: p.programBlock || "",
+                programYear: p.programYear || lastSelection?.year || "",
+                programBlock: p.programBlock || lastSelection?.block || "",
                 domain: p.domain || "Skill",
-                level: p.level || "",
+                level: p.level || lastSelection?.level || "",
                 procedureName: p.procedureName || "",
                 procedureDescription: p.procedureDescription || combinedProcedures,
                 date: p.date || p.dischargeDate || new Date().toISOString().split('T')[0],
@@ -66,7 +103,7 @@ export default function DischargeForm({ patient, onClose, onConfirmDischarge, on
                 })(),
                 address: p.address || "",
                 history: p.history || "",
-                diagnosis: p.examination || p.diagnosis || "", // Load Clinical Examination / Findings
+                diagnosis: p.examination || p.diagnosis || "", 
                 investigation: p.investigation || "",
                 provisionalDiagnosis: p.provisionalDiagnosis || p.diagnosis || "",
                 finalDiagnosis: p.finalDiagnosis || p.diagnosis || "",
@@ -82,27 +119,46 @@ export default function DischargeForm({ patient, onClose, onConfirmDischarge, on
         }
     });
 
+    const handleAcademicSelect = (preset: typeof ACADEMIC_COMBINATIONS[0]) => {
+        setFormData(prev => ({
+            ...prev,
+            programYear: preset.year,
+            programBlock: preset.block,
+            level: preset.level
+        }));
+        localStorage.setItem("last_discharge_academic", JSON.stringify(preset));
+        setIsAcademicOpen(false);
+    };
+
+    const movePreset = (index: number, direction: 'up' | 'down') => {
+        const newPresets = [...academicPresets];
+        const targetIndex = direction === 'up' ? index - 1 : index + 1;
+        if (targetIndex < 0 || targetIndex >= newPresets.length) return;
+        [newPresets[index], newPresets[targetIndex]] = [newPresets[targetIndex], newPresets[index]];
+        setAcademicPresets(newPresets);
+        localStorage.setItem("discharge_academic_order", JSON.stringify(newPresets));
+    };
+
     const handleChange = (field: string, value: any) => {
         setFormData(prev => ({ ...prev, [field]: value }));
     };
 
     const handleCategoryChange = (cat: string) => {
         setCategory(cat as ProcedureCategory);
-        handleChange("procedureName", ""); // Reset procedure when category changes
+        handleChange("procedureName", ""); 
         setTimeout(() => setIsProcedureOpen(true), 150);
     };
 
     const handleSubmit = () => {
         onConfirmDischarge({
             ...formData,
-            hospitalNo: patient.hospitalNo, // CRITICAL: Required for UnitPage to identify and discharge the patient
+            hospitalNo: patient.hospitalNo, 
             originalPatientId: patient.id,
         });
     };
 
     const handleJustSave = () => {
         if (onSave) {
-            // Map form data back to patient structure where appropriate
             onSave({
                 ...patient,
                 name: formData.patientName,
@@ -112,28 +168,77 @@ export default function DischargeForm({ patient, onClose, onConfirmDischarge, on
                 programBlock: formData.programBlock,
                 domain: formData.domain,
                 level: formData.level,
-                history: formData.history, // Map back
-                examination: formData.diagnosis, // Map "Diagnosis" field (Clinical Findings) back to 'examination'
+                history: formData.history,
+                examination: formData.diagnosis,
                 investigation: formData.investigation,
                 procedureName: formData.procedureName,
                 procedureDescription: formData.procedureDescription,
-                diagnosis: formData.finalDiagnosis || formData.provisionalDiagnosis, // Prefer final diagnosis
-                plan: formData.management, // Map 'Management' back to 'plan'
+                diagnosis: formData.finalDiagnosis || formData.provisionalDiagnosis,
+                plan: formData.management,
                 followUp: formData.followUp
             });
             onClose();
         }
     };
 
-    const addSuggestion = (field: "history" | "diagnosis", text: string) => {
+    const addSuggestion = (field: "history" | "diagnosis" | "investigation", text: string) => {
         setFormData(prev => ({
             ...prev,
             [field]: prev[field] ? `${prev[field]}\n${text}` : text
         }));
     };
 
+    const getDynamicHistorySuggestions = () => {
+        const sideText = side === "Blank" ? "" : side.toLowerCase() + " ";
+        return [
+            `Alleged history of MVA, sustaining impact over ${sideText}${bodyPart} followed by pain and swelling.`,
+            `Alleged history of fall on outstretched hand sustaining impact over ${sideText}${bodyPart} followed by pain, swelling.`,
+            `Alleged history of slip and fall, sustaining impact over ${sideText}${bodyPart} followed by pain and swelling`,
+            `Alleged history of fall from height, sustaining impact over ${sideText}${bodyPart} followed by pain`,
+            "No history of head trauma, loss of consiousness or injury to other body parts"
+        ];
+    };
+
+    const getDynamicExamSuggestion = () => {
+        const sideText = side === "Blank" ? "" : side.toLowerCase() + " ";
+        const combined = `${sideText}${bodyPart}`;
+        const capitalized = combined.charAt(0).toUpperCase() + combined.slice(1);
+        return `${capitalized}:`;
+    };
+
+    const getDynamicInvestigationSuggestions = () => {
+        const sideText = side === "Blank" ? "" : side.toLowerCase() + " ";
+        return [
+            `Xray ${sideText}${bodyPart} AP and Lateral`,
+            `MRI ${sideText}${bodyPart}`,
+            `CT ${sideText}${bodyPart}`,
+            `USG ${sideText}${bodyPart}`
+        ];
+    };
+
     const [showHistorySuggestions, setShowHistorySuggestions] = useState(false);
     const [showClinicalSuggestions, setShowClinicalSuggestions] = useState(false);
+    const [showInvestigationSuggestions, setShowInvestigationSuggestions] = useState(false);
+
+    const handleSync = (group: "procedure" | "diagnosis", sourceField: string) => {
+        const sourceValue = (formData as any)[sourceField];
+        if (!sourceValue) return;
+
+        if (group === "procedure") {
+            setFormData(prev => ({
+                ...prev,
+                procedureName: prev.procedureName || sourceValue,
+                procedureDescription: prev.procedureDescription || sourceValue,
+                management: prev.management || sourceValue
+            }));
+        } else if (group === "diagnosis") {
+            setFormData(prev => ({
+                ...prev,
+                provisionalDiagnosis: prev.provisionalDiagnosis || sourceValue,
+                finalDiagnosis: prev.finalDiagnosis || sourceValue
+            }));
+        }
+    };
 
     const handleCopyScript = () => {
         // Generates a script to auto-fill the eLogbook form based on the provided HTML structure
@@ -427,10 +532,60 @@ export default function DischargeForm({ patient, onClose, onConfirmDischarge, on
                 {/* Scrollable Body */}
                 <div className="flex-1 overflow-y-auto p-6">
                     <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+                        <div className="md:col-span-3">
+                            <label className="block text-xs font-medium text-gray-400 mb-1">Combined Academic Preset (Syncs dropdowns below)</label>
+                            <div className="relative">
+                                <button
+                                    onClick={() => setIsAcademicOpen(!isAcademicOpen)}
+                                    className="w-full bg-white/5 border border-white/10 rounded-lg p-3 text-sm text-white focus:border-primary outline-none flex justify-between items-center text-left min-h-[46px]"
+                                >
+                                    <span className="block truncate">
+                                        {formData.programYear} Block {formData.programBlock}, Level {formData.level}
+                                    </span>
+                                    <span className="text-xs opacity-50 shrink-0">▼</span>
+                                </button>
+                                <AnimatePresence>
+                                    {isAcademicOpen && (
+                                        <motion.div
+                                            initial={{ opacity: 0, y: -10 }}
+                                            animate={{ opacity: 1, y: 0 }}
+                                            exit={{ opacity: 0, y: -10 }}
+                                            className="absolute z-[70] mt-1 w-full max-h-80 overflow-y-auto rounded-lg bg-[#0a0a0a] border border-white/20 shadow-xl custom-scrollbar"
+                                        >
+                                            <div className="p-2 space-y-1">
+                                                {academicPresets.map((p: any, idx: number) => (
+                                                    <div key={idx} className="flex items-center space-x-2 group">
+                                                        <button
+                                                            onClick={() => handleAcademicSelect(p)}
+                                                            className="flex-1 px-3 py-2 text-left text-sm text-white hover:bg-white/10 transition-colors rounded border-white/5 border"
+                                                        >
+                                                            {p.year} Block {p.block}, Level {p.level}
+                                                        </button>
+                                                        <div className="flex flex-col">
+                                                            <button onClick={() => movePreset(idx, 'up')} className="p-1 hover:text-primary transition-colors disabled:opacity-30" disabled={idx === 0}><ChevronUp size={14} /></button>
+                                                            <button onClick={() => movePreset(idx, 'down')} className="p-1 hover:text-primary transition-colors disabled:opacity-30" disabled={idx === academicPresets.length - 1}><ChevronDown size={14} /></button>
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </motion.div>
+                                    )}
+                                </AnimatePresence>
+                                {isAcademicOpen && <div className="fixed inset-0 z-[65]" onClick={() => setIsAcademicOpen(false)} />}
+                            </div>
+                        </div>
+                        <SelectField label="Domain" value={formData.domain} onChange={(v) => handleChange("domain", v)} options={["Knowledge", "Skill", "Attitude"]} />
+                        
                         <SelectField label="Program Year" value={formData.programYear} onChange={(v) => handleChange("programYear", v)} options={["First", "Second", "Third"]} />
                         <SelectField label="Program Block" value={formData.programBlock} onChange={(v) => handleChange("programBlock", v)} options={["I", "II", "III", "IV", "V", "VI"]} />
-                        <SelectField label="Domain" value={formData.domain} onChange={(v) => handleChange("domain", v)} options={["Knowledge", "Skill", "Attitude"]} />
                         <SelectField label="Level" value={formData.level} onChange={(v) => handleChange("level", v)} options={["I", "II", "III", "IV"]} />
+                    </div>
+
+                    <hr className="border-white/10 my-6" />
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                        <SelectField label="Side" value={side} onChange={setSide} options={SIDE_OPTIONS} />
+                        <SelectField label="Body Part" value={bodyPart} onChange={setBodyPart} options={BODY_PART_OPTIONS} />
                     </div>
 
                     <hr className="border-white/10 my-6" />
@@ -451,11 +606,17 @@ export default function DischargeForm({ patient, onClose, onConfirmDischarge, on
                                     options={category ? DISCHARGE_PROCEDURE_OPTIONS[category as ProcedureCategory] : []}
                                     isOpen={isProcedureOpen}
                                     setIsOpen={setIsProcedureOpen}
+                                    onSync={() => handleSync("procedure", "procedureName")}
                                 />
                             )}
                         </div>
                         <div className="md:col-span-2">
-                            <TextAreaField label="Procedure Description" value={formData.procedureDescription} onChange={(v) => handleChange("procedureDescription", v)} />
+                            <TextAreaField 
+                                label="Procedure Description" 
+                                value={formData.procedureDescription} 
+                                onChange={(v) => handleChange("procedureDescription", v)} 
+                                onSync={() => handleSync("procedure", "procedureDescription")}
+                            />
                         </div>
                     </div>
 
@@ -480,7 +641,7 @@ export default function DischargeForm({ patient, onClose, onConfirmDischarge, on
                             </button>
                             {showHistorySuggestions && (
                                 <div className="mt-2 flex flex-wrap gap-2">
-                                    {HISTORY_SUGGESTIONS.map(s => (
+                                    {getDynamicHistorySuggestions().map(s => (
                                         <button key={s} onClick={() => addSuggestion("history", s)} className="text-xs rounded-full bg-white/5 px-2 py-1 text-gray-400 hover:bg-white/10 hover:text-white uppercase">+ {s}</button>
                                     ))}
                                 </div>
@@ -488,9 +649,14 @@ export default function DischargeForm({ patient, onClose, onConfirmDischarge, on
                         </div>
                         <div>
                             <TextAreaField label="Clinical Examination / Findings" value={formData.diagnosis} onChange={(v) => handleChange("diagnosis", v)} />
-                            <button onClick={() => setShowClinicalSuggestions(!showClinicalSuggestions)} className="text-xs text-primary mt-1 hover:underline">
-                                {showClinicalSuggestions ? "Hide Suggestions" : "Show Suggestions"}
-                            </button>
+                            <div className="flex space-x-4">
+                                <button onClick={() => setShowClinicalSuggestions(!showClinicalSuggestions)} className="text-xs text-primary mt-1 hover:underline">
+                                    {showClinicalSuggestions ? "Hide Static" : "Show Static Suggestions"}
+                                </button>
+                                <button onClick={() => addSuggestion("diagnosis", getDynamicExamSuggestion())} className="text-xs text-primary mt-1 hover:underline">
+                                    + Add "{getDynamicExamSuggestion()}"
+                                </button>
+                            </div>
                             {showClinicalSuggestions && (
                                 <div className="mt-2 flex flex-wrap gap-2">
                                     {CLINICAL_SUGGESTIONS.map(s => (
@@ -502,13 +668,42 @@ export default function DischargeForm({ patient, onClose, onConfirmDischarge, on
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-                        <TextAreaField label="Investigation" value={formData.investigation} onChange={(v) => handleChange("investigation", v)} />
-                        <TextAreaField label="Provisional Diagnosis" value={formData.provisionalDiagnosis} onChange={(v) => handleChange("provisionalDiagnosis", v)} />
+                        <div>
+                            <TextAreaField label="Investigation" value={formData.investigation} onChange={(v) => handleChange("investigation", v)} />
+                            <button onClick={() => setShowInvestigationSuggestions(!showInvestigationSuggestions)} className="text-xs text-primary mt-1 hover:underline">
+                                {showInvestigationSuggestions ? "Hide Suggestions" : "Show Suggestions"}
+                            </button>
+                            {showInvestigationSuggestions && (
+                                <div className="mt-2 flex flex-wrap gap-2">
+                                    {getDynamicInvestigationSuggestions().map(s => (
+                                        <button key={s} onClick={() => addSuggestion("investigation", s)} className="text-xs rounded-full bg-white/5 px-2 py-1 text-gray-400 hover:bg-white/10 hover:text-white uppercase">+ {s}</button>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                        <div className="md:col-span-1">
+                            <TextAreaField 
+                                label="Provisional Diagnosis" 
+                                value={formData.provisionalDiagnosis} 
+                                onChange={(v) => handleChange("provisionalDiagnosis", v)} 
+                                onSync={() => handleSync("diagnosis", "provisionalDiagnosis")}
+                            />
+                        </div>
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-                        <TextAreaField label="Final Diagnosis" value={formData.finalDiagnosis} onChange={(v) => handleChange("finalDiagnosis", v)} />
-                        <TextAreaField label="Management" value={formData.management} onChange={(v) => handleChange("management", v)} />
+                        <TextAreaField 
+                            label="Final Diagnosis" 
+                            value={formData.finalDiagnosis} 
+                            onChange={(v) => handleChange("finalDiagnosis", v)} 
+                            onSync={() => handleSync("diagnosis", "finalDiagnosis")}
+                        />
+                        <TextAreaField 
+                            label="Management" 
+                            value={formData.management} 
+                            onChange={(v) => handleChange("management", v)} 
+                            onSync={() => handleSync("procedure", "management")}
+                        />
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
@@ -588,10 +783,17 @@ interface TextAreaFieldProps {
     type?: string;
 }
 
-function TextAreaField({ label, value, onChange }: TextAreaFieldProps) {
+function TextAreaField({ label, value, onChange, onSync }: TextAreaFieldProps & { onSync?: () => void }) {
     return (
         <div>
-            <label className="block text-xs font-medium text-gray-400 mb-1">{label}</label>
+            <div className="flex items-center justify-between mb-1">
+                <label className="block text-xs font-medium text-gray-400">{label}</label>
+                {onSync && (
+                    <button onClick={onSync} className="p-1 hover:text-primary text-gray-400 transition-colors" title="Sync fields in this group">
+                        <RefreshCcw size={12} />
+                    </button>
+                )}
+            </div>
             <textarea
                 rows={3}
                 value={value}
@@ -634,12 +836,20 @@ interface CustomSelectProps {
     options: string[];
     isOpen: boolean;
     setIsOpen: (isOpen: boolean) => void;
+    onSync?: () => void;
 }
 
-function CustomSelect({ label, value, onChange, options, isOpen, setIsOpen }: CustomSelectProps) {
+function CustomSelect({ label, value, onChange, options, isOpen, setIsOpen, onSync }: CustomSelectProps) {
     return (
         <div className="relative">
-            <label className="block text-xs font-medium text-gray-400 mb-1">{label}</label>
+            <div className="flex items-center justify-between mb-1">
+                <label className="block text-xs font-medium text-gray-400">{label}</label>
+                {onSync && (
+                    <button onClick={onSync} className="p-1 hover:text-primary text-gray-400 transition-colors" title="Sync fields in this group">
+                        <RefreshCcw size={12} />
+                    </button>
+                )}
+            </div>
             <button
                 onClick={() => setIsOpen(!isOpen)}
                 className="w-full bg-white/5 border border-white/10 rounded-lg p-3 text-sm text-white focus:border-primary outline-none flex justify-between items-center text-left min-h-[46px]"
