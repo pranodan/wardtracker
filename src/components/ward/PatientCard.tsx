@@ -1,7 +1,7 @@
 import { Patient, TrackingEntry } from "@/types";
 import { motion, AnimatePresence } from "framer-motion";
 import { differenceInDays, isValid, compareDesc } from "date-fns";
-import { cn, parseAnyDate, getInitials } from "@/lib/utils";
+import { cn, parseAnyDate } from "@/lib/utils";
 import { useState, useRef, useEffect } from "react";
 import { Activity, X, Maximize2, Minimize2, ChevronLeft, ChevronRight } from "lucide-react";
 
@@ -92,7 +92,7 @@ export default function PatientCard({ patient, onClick, showConsultantInitials }
                 </div>
                 {showConsultantInitials && patient.consultant && (
                     <div className="mb-2 text-[10px] font-bold text-gray-500 uppercase pl-[1px]">
-                        {getInitials(patient.consultant)}
+                        {patient.consultant}
                     </div>
                 )}
                 <div className="mb-1">

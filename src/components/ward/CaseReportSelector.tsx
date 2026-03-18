@@ -2,7 +2,7 @@
 import { useState } from "react";
 import { CaseReport } from "@/types";
 import { useCaseReports } from "@/hooks/useCaseReports";
-import { Search, FileText, ChevronRight, BookOpen, Info, Edit2, Play, Trash2, Plus } from "lucide-react";
+import { Search, FileText, BookOpen, Info, Edit2, Play, Trash2, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface CaseReportSelectorProps {
@@ -129,9 +129,19 @@ export default function CaseReportSelector({ onSelect, currentDiagnosis, onClose
                             value={activeTab === "kb" ? kbQuery : templateQuery}
                             onChange={(e) => activeTab === "kb" ? setKbQuery(e.target.value) : setTemplateQuery(e.target.value)}
                             placeholder={activeTab === "kb" ? "Search expert cases..." : "Search your templates..."}
-                            className="w-full rounded-lg border border-white/10 bg-white/5 p-3 pl-10 text-sm text-white outline-none focus:border-primary"
+                            className="w-full rounded-lg border border-white/10 bg-white/5 p-3 pl-10 pr-10 text-sm text-white outline-none focus:border-primary"
                         />
                         <Search className="absolute left-3 top-3.5 text-gray-400" size={16} />
+                        {(activeTab === "kb" ? kbQuery : templateQuery) && (
+                            <button
+                                type="button"
+                                onClick={() => activeTab === "kb" ? setKbQuery("") : setTemplateQuery("")}
+                                className="absolute right-3 top-3 text-gray-500 hover:text-white"
+                                aria-label="Clear case report search"
+                            >
+                                <X size={16} />
+                            </button>
+                        )}
                     </div>
                 </div>
 

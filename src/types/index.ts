@@ -36,6 +36,18 @@ export interface Patient {
     level?: string;
     followUp?: string; // For auto-filling Discharge Form
     dischargeDate?: string; // For auto-filling Discharge Form
+    hasBeenInMainList?: boolean;
+    autoDischarged?: boolean;
+    autoDischargeRecordId?: string;
+    patientName?: string;
+    inPatientId?: string;
+    date?: string;
+    age?: string;
+    gender?: string;
+    provisionalDiagnosis?: string;
+    finalDiagnosis?: string;
+    management?: string;
+    submittedTo?: string[];
 }
 
 export interface TrackingEntry {

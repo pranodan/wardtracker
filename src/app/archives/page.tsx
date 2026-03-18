@@ -5,11 +5,12 @@ import { format, parse } from "date-fns";
 import { Patient } from "@/types";
 import DischargeForm from "@/components/ward/DischargeForm";
 import { useRouter } from "next/navigation";
-import { Home, Loader2 } from "lucide-react";
+import { Home, X } from "lucide-react";
 import { motion } from "framer-motion";
 import { useToast } from "@/components/ui/Toast";
 import { db } from "@/lib/firebase";
 import { doc, getDoc } from "firebase/firestore";
+import { normalizeAgeGender } from "@/lib/utils";
 
 const DATE_FORMATS = ["M/d/yy", "yyyy/MM/dd", "yyyy-MM-dd"];
 
@@ -147,7 +148,7 @@ export default function ArchivesPage() {
             department: item["Department"],
             consultant: "Dr Bibek Baskota", // Hardcoded per requirements
             mobile: item["Mobile"],
-            ageGender: item["Age/Gender"],
+            ageGender: normalizeAgeGender(item["Age/Gender"]),
             bedNo: item["Bed No"],
             address: item["Address"],
             history: item["History"] || item["history"] || "",
@@ -249,10 +250,20 @@ export default function ArchivesPage() {
                             placeholder="Search Name or Hospital No..."
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
-                            className="w-full md:w-64 bg-white/5 border border-white/10 rounded-full px-4 py-2 text-sm text-white focus:outline-none focus:border-primary transition-all placeholder:text-gray-500"
+                            className="w-full md:w-64 bg-white/5 border border-white/10 rounded-full px-4 py-2 pr-10 text-sm text-white focus:outline-none focus:border-primary transition-all placeholder:text-gray-500"
                         />
+                        {searchQuery && (
+                            <button
+                                type="button"
+                                onClick={() => setSearchQuery("")}
+                                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white"
+                                aria-label="Clear archive search"
+                            >
+                                <X size={16} />
+                            </button>
+                        )}
                         {searchQuery !== debouncedQuery && (
-                            <div className="absolute right-3 top-2.5">
+                            <div className="absolute right-10 top-2.5">
                                 <span className="block h-2 w-2 animate-ping rounded-full bg-primary" />
                             </div>
                         )}

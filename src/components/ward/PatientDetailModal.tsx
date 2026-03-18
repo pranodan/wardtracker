@@ -43,6 +43,37 @@ const PROCEDURE_SUGGESTIONS = [
     "Tendon Transfer"
 ];
 
+const DIAGNOSIS_SUGGESTIONS = [
+    "Open fracture",
+    "Closed fracture",
+    "Post-op status",
+    "Soft tissue injury",
+    "Implant failure"
+];
+
+const PROCEDURE_STORAGE_KEY = "wardtracker_procedure_suggestions";
+const DIAGNOSIS_STORAGE_KEY = "wardtracker_diagnosis_suggestions";
+
+function loadSuggestions(storageKey: string, defaults: string[]) {
+    if (typeof window === "undefined") return defaults;
+
+    try {
+        const stored = window.localStorage.getItem(storageKey);
+        if (!stored) return defaults;
+
+        const parsed = JSON.parse(stored);
+        if (!Array.isArray(parsed)) return defaults;
+
+        const cleaned = parsed
+            .map(item => String(item || "").trim())
+            .filter(Boolean);
+
+        return cleaned.length > 0 ? Array.from(new Set(cleaned)) : defaults;
+    } catch {
+        return defaults;
+    }
+}
+
 export default function PatientDetailModal({ patient, onClose, onSave, onDischarge, readOnly, onTransfer, consultants, onRemove, onSaveAndNext, onSkip }: PatientDetailModalProps) {
     const [activeTab, setActiveTab] = useState<"clinical" | "clinical_data" | "tracking">("clinical");
     const [formData, setFormData] = useState<Partial<Patient>>(patient || {});
@@ -54,6 +85,8 @@ export default function PatientDetailModal({ patient, onClose, onSave, onDischar
     const [isTransferring, setIsTransferring] = useState(false);
     const [hasCopied, setHasCopied] = useState(false);
     const [showArchivedToast, setShowArchivedToast] = useState(false);
+    const [procedureSuggestions, setProcedureSuggestions] = useState<string[]>(() => loadSuggestions(PROCEDURE_STORAGE_KEY, PROCEDURE_SUGGESTIONS));
+    const [diagnosisSuggestions, setDiagnosisSuggestions] = useState<string[]>(() => loadSuggestions(DIAGNOSIS_STORAGE_KEY, DIAGNOSIS_SUGGESTIONS));
     const archivedPlanRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
@@ -70,6 +103,14 @@ export default function PatientDetailModal({ patient, onClose, onSave, onDischar
             document.removeEventListener("mousedown", handleClickOutside);
         };
     }, [showArchivedToast]);
+
+    useEffect(() => {
+        window.localStorage.setItem(PROCEDURE_STORAGE_KEY, JSON.stringify(procedureSuggestions));
+    }, [procedureSuggestions]);
+
+    useEffect(() => {
+        window.localStorage.setItem(DIAGNOSIS_STORAGE_KEY, JSON.stringify(diagnosisSuggestions));
+    }, [diagnosisSuggestions]);
 
     // Knowledge Base State
     const [isSearchOpen, setIsSearchOpen] = useState(false);
@@ -161,6 +202,32 @@ export default function PatientDetailModal({ patient, onClose, onSave, onDischar
         } else {
             setNewSurgery(prev => ({ ...prev, procedure: prev.procedure ? `${prev.procedure} + ${proc}` : proc }));
         }
+    };
+
+    const appendDiagnosis = (diagnosis: string) => {
+        updateField("diagnosis", formData.diagnosis ? `${formData.diagnosis}; ${diagnosis}` : diagnosis);
+    };
+
+    const addCustomSuggestion = (type: "procedure" | "diagnosis") => {
+        const value = window.prompt(`Add a ${type} suggestion:`);
+        const cleaned = value?.trim();
+        if (!cleaned) return;
+
+        if (type === "procedure") {
+            setProcedureSuggestions(prev => Array.from(new Set([...prev, cleaned])));
+            return;
+        }
+
+        setDiagnosisSuggestions(prev => Array.from(new Set([...prev, cleaned])));
+    };
+
+    const removeCustomSuggestion = (type: "procedure" | "diagnosis", suggestion: string) => {
+        if (type === "procedure") {
+            setProcedureSuggestions(prev => prev.filter(item => item !== suggestion));
+            return;
+        }
+
+        setDiagnosisSuggestions(prev => prev.filter(item => item !== suggestion));
     };
 
     const removeSurgery = (index: number) => {
@@ -444,7 +511,18 @@ export default function PatientDetailModal({ patient, onClose, onSave, onDischar
                     <div className="flex-1 overflow-y-auto p-6 pt-2">
                         {activeTab === "clinical" ? (
                             <div className="space-y-6">
-                                <InputGroup label="Diagnosis" value={formData.diagnosis} onChange={(v: string) => updateField("diagnosis", v)} disabled={readOnly} />
+                                <div className="space-y-2">
+                                    <InputGroup label="Diagnosis" value={formData.diagnosis} onChange={(v: string) => updateField("diagnosis", v)} disabled={readOnly} />
+                                    {!readOnly && (
+                                        <SuggestionChips
+                                            label="Diagnosis Suggestions"
+                                            suggestions={diagnosisSuggestions}
+                                            onSelect={appendDiagnosis}
+                                            onAdd={() => addCustomSuggestion("diagnosis")}
+                                            onRemove={(suggestion) => removeCustomSuggestion("diagnosis", suggestion)}
+                                        />
+                                    )}
+                                </div>
 
                                 {/* Surgeries Section */}
                                 <div className="space-y-2">
@@ -477,17 +555,13 @@ export default function PatientDetailModal({ patient, onClose, onSave, onDischar
                                         </div>
                                         {/* Chips for Primary Procedure */}
                                         {!readOnly && (
-                                            <div className="flex flex-wrap gap-2">
-                                                {PROCEDURE_SUGGESTIONS.map(s => (
-                                                    <button
-                                                        key={s}
-                                                        onClick={() => appendProcedure(s, true)}
-                                                        className="text-[10px] text-gray-400 hover:text-primary underline decoration-dotted"
-                                                    >
-                                                        {s}
-                                                    </button>
-                                                ))}
-                                            </div>
+                                            <SuggestionChips
+                                                label="Procedure Suggestions"
+                                                suggestions={procedureSuggestions}
+                                                onSelect={(suggestion) => appendProcedure(suggestion, true)}
+                                                onAdd={() => addCustomSuggestion("procedure")}
+                                                onRemove={(suggestion) => removeCustomSuggestion("procedure", suggestion)}
+                                            />
                                         )}
                                     </div>
 
@@ -541,17 +615,13 @@ export default function PatientDetailModal({ patient, onClose, onSave, onDischar
                                                     />
 
                                                     {/* Chips for New Surgery */}
-                                                    <div className="flex flex-wrap gap-2">
-                                                        {PROCEDURE_SUGGESTIONS.map(s => (
-                                                            <button
-                                                                key={s}
-                                                                onClick={() => appendProcedure(s, false)}
-                                                                className="text-[10px] text-gray-400 hover:text-primary underline decoration-dotted"
-                                                            >
-                                                                {s}
-                                                            </button>
-                                                        ))}
-                                                    </div>
+                                                    <SuggestionChips
+                                                        label="Procedure Suggestions"
+                                                        suggestions={procedureSuggestions}
+                                                        onSelect={(suggestion) => appendProcedure(suggestion, false)}
+                                                        onAdd={() => addCustomSuggestion("procedure")}
+                                                        onRemove={(suggestion) => removeCustomSuggestion("procedure", suggestion)}
+                                                    />
 
                                                     <input
                                                         type="date"
@@ -858,6 +928,54 @@ interface TabButtonProps {
     onClick: () => void;
     icon: React.ReactNode;
     label: string;
+}
+
+interface SuggestionChipsProps {
+    label: string;
+    suggestions: string[];
+    onSelect: (suggestion: string) => void;
+    onAdd: () => void;
+    onRemove: (suggestion: string) => void;
+}
+
+function SuggestionChips({ label, suggestions, onSelect, onAdd, onRemove }: SuggestionChipsProps) {
+    return (
+        <div className="space-y-2">
+            <div className="flex items-center justify-between">
+                <span className="text-[10px] font-medium uppercase tracking-wide text-gray-500">{label}</span>
+                <button
+                    type="button"
+                    onClick={onAdd}
+                    className="inline-flex items-center space-x-1 text-[10px] uppercase tracking-wide text-primary hover:text-primary/80"
+                >
+                    <Plus size={12} />
+                    <span>Add</span>
+                </button>
+            </div>
+            <div className="flex flex-wrap gap-2">
+                {suggestions.map(suggestion => (
+                    <div key={suggestion} className="group inline-flex items-center rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[10px] text-gray-300">
+                        <button
+                            type="button"
+                            onClick={() => onSelect(suggestion)}
+                            className="max-w-[12rem] truncate hover:text-primary"
+                            title={suggestion}
+                        >
+                            {suggestion}
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => onRemove(suggestion)}
+                            className="ml-1 text-gray-500 opacity-0 transition-opacity group-hover:opacity-100 hover:text-red-400"
+                            aria-label={`Remove ${suggestion}`}
+                        >
+                            <X size={12} />
+                        </button>
+                    </div>
+                ))}
+            </div>
+        </div>
+    );
 }
 
 function TabButton({ active, onClick, icon, label }: TabButtonProps) {

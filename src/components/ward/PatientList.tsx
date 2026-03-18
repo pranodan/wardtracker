@@ -1,9 +1,9 @@
-"use client";
+﻿"use client";
 
 import { Patient } from "@/types";
 import { useState, useMemo, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Search, ChevronDown, ChevronUp, Copy, Check } from "lucide-react";
+import { Search, ChevronDown, ChevronUp, Copy, Check, X } from "lucide-react";
 import { parseAnyDate, cn } from "@/lib/utils";
 import PatientDetailModal from "./PatientDetailModal";
 import PatientSummaryModal from "./PatientSummaryModal";
@@ -33,6 +33,9 @@ interface PatientListProps {
     groups?: import("@/utils/bedGrouping").BedGroup[];
     showConsultantInitials?: boolean;
     enableBulkCopy?: boolean;
+    groupDateField?: keyof Patient;
+    dateColumnLabel?: string;
+    hideSearch?: boolean;
 }
 
 export default function PatientList({
@@ -52,7 +55,10 @@ export default function PatientList({
     groupByDate,
     showConsultantInitials,
     unitId,
-    enableBulkCopy
+    enableBulkCopy,
+    groupDateField = "ipDate",
+    dateColumnLabel = "DOA",
+    hideSearch = false
 }: PatientListProps) {
     const [searchQuery, setSearchQuery] = useState("");
     const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
@@ -223,7 +229,7 @@ export default function PatientList({
                 )}
 
                 {/* Search */}
-                {!collapsible && (
+                {!collapsible && !hideSearch && (
                     <div className="relative w-full sm:w-72">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" size={18} />
                         <input
@@ -231,8 +237,18 @@ export default function PatientList({
                             placeholder="Search patients..."
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
-                            className="w-full rounded-full bg-white/5 py-2 pl-10 pr-4 text-sm text-white outline-none focus:ring-2 focus:ring-primary/50"
+                            className="w-full rounded-full bg-white/5 py-2 pl-10 pr-10 text-sm text-white outline-none focus:ring-2 focus:ring-primary/50"
                         />
+                        {searchQuery && (
+                            <button
+                                type="button"
+                                onClick={() => setSearchQuery("")}
+                                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white"
+                                aria-label="Clear patient search"
+                            >
+                                <X size={16} />
+                            </button>
+                        )}
                     </div>
                 )}
             </div>
@@ -289,7 +305,7 @@ export default function PatientList({
                                     {(() => {
                                         // 1. Group Patients
                                         const grouped = filteredPatients.reduce((acc, patient) => {
-                                            const date = patient.ipDate || "Unknown Date";
+                                            const date = String(patient[groupDateField] || "Unknown Date");
                                             if (!acc[date]) acc[date] = [];
                                             acc[date].push(patient);
                                             return acc;
@@ -337,7 +353,7 @@ export default function PatientList({
                                                                 <th className="p-4">Age/Sex</th>
                                                                 <th className="p-4">Phone</th>
                                                                 <th className="p-4">Bed</th>
-                                                                <th className="p-4">DOA</th>
+                                                                <th className="p-4">{dateColumnLabel}</th>
                                                             </tr>
                                                         </thead>
                                                         <tbody className="divide-y divide-white/5">
@@ -352,7 +368,7 @@ export default function PatientList({
                                                                     <td className="p-4 uppercase">{patient.ageGender}</td>
                                                                     <td className="p-4">{patient.mobile || "N/A"}</td>
                                                                     <td className="p-4 font-bold text-primary">{patient.bedNo}</td>
-                                                                    <td className="p-4 text-xs">{patient.ipDate}</td>
+                                                                    <td className="p-4 text-xs">{String(patient[groupDateField] || "")}</td>
                                                                 </tr>
                                                             ))}
                                                         </tbody>
@@ -372,7 +388,7 @@ export default function PatientList({
                                                 <th className="p-4">Age/Sex</th>
                                                 <th className="p-4">Phone</th>
                                                 <th className="p-4">Bed</th>
-                                                <th className="p-4">DOA</th>
+                                                <th className="p-4">{dateColumnLabel}</th>
                                             </tr>
                                         </thead>
                                         <tbody className="divide-y divide-white/5">
@@ -387,7 +403,7 @@ export default function PatientList({
                                                     <td className="p-4 uppercase">{patient.ageGender}</td>
                                                     <td className="p-4">{patient.mobile}</td>
                                                     <td className="p-4 font-bold text-primary">{patient.bedNo}</td>
-                                                    <td className="p-4 text-xs">{patient.ipDate}</td>
+                                                    <td className="p-4 text-xs">{String(patient[groupDateField] || "")}</td>
                                                 </tr>
                                             ))}
                                         </tbody>
@@ -471,3 +487,4 @@ export default function PatientList({
         </div>
     );
 }
+

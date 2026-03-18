@@ -1,105 +1,104 @@
-import { NextResponse } from "next/server";
-import { getSheetData } from "@/lib/sheets";
+﻿import { NextResponse } from "next/server";
+import { getSheetDataFromCandidates } from "@/lib/sheets";
 import { Patient } from "@/types";
+import { normalizeAgeGender, normalizeGenderLabel, sanitizeSheetValue } from "@/lib/utils";
 
 export async function GET() {
     try {
-        const admittedData = await getSheetData("Scraped!A:Z"); // Expanded range
-        const preopData = await getSheetData("SportsPreop!A:Z");
+        type SheetRow = Record<string, string | undefined>;
 
-        // Helper to find value by fuzzy key (ignoring case and extra spaces)
-        const getValue = (row: any, keyPart: string) => {
+        const admittedSource = await getSheetDataFromCandidates([
+            process.env.GOOGLE_SHEETS_MAIN_RANGE || "Scraped!A:Z",
+            "Scraped!A:Z"
+        ]);
+        const admittedData = admittedSource.data as SheetRow[];
+
+        const electiveSource = await getSheetDataFromCandidates([
+            process.env.GOOGLE_SHEETS_ELECTIVE_RANGE || "SportsPreop!A:Z",
+            "SportsPreop!A:Z"
+        ]);
+        const preopData = electiveSource.data as SheetRow[];
+
+        const getValue = (row: SheetRow, keyPart: string) => {
             const keys = Object.keys(row);
-            const normalizedTarget = keyPart.toLowerCase().trim().replace(/\s+/g, ' ');
-            
-            // Try exact match first
-            let key = keys.find(k => k.toLowerCase().trim().replace(/\s+/g, ' ') === normalizedTarget);
-            
-            // Fallback to fuzzy match (includes) if no exact match
+            const normalizedTarget = keyPart.toLowerCase().trim().replace(/\s+/g, " ");
+
+            let key = keys.find(k => k.toLowerCase().trim().replace(/\s+/g, " ") === normalizedTarget);
+
             if (!key) {
-                key = keys.find(k => k.toLowerCase().trim().replace(/\s+/g, ' ').includes(normalizedTarget));
-            }
-            
-            const val = key ? row[key] : "";
-
-            // Sanitize Excel/Sheet errors
-            if (typeof val === "string" && (val.includes("#NAME?") || val.includes("#REF!") || val.includes("#VALUE!") || val.includes("#N/A"))) {
-                return "";
+                key = keys.find(k => k.toLowerCase().trim().replace(/\s+/g, " ").includes(normalizedTarget));
             }
 
-            return val;
+            return sanitizeSheetValue(key ? row[key] : "");
         };
 
-        // Normalize date strings from mixed formats (M/D/YYYY, DD/MM/YYYY, YYYY/MM/DD) to YYYY-MM-DD
         const normalizeDate = (dateStr: string): string => {
             if (!dateStr || typeof dateStr !== "string") return "";
             const trimmed = dateStr.trim();
             if (!trimmed) return "";
 
-            // Already ISO format (YYYY-MM-DD)?
             if (/^\d{4}-\d{2}-\d{2}/.test(trimmed)) return trimmed.substring(0, 10);
 
-            // Nepali calendar dates (e.g. 2082/10/18) - year > 2050
             const slashParts = trimmed.split("/");
             if (slashParts.length === 3) {
                 const [p1, p2, p3] = slashParts.map(s => parseInt(s, 10));
 
-                // YYYY/MM/DD format (Nepali dates: year > 2050)
                 if (p1 > 2050) {
                     return `${p1}-${String(p2).padStart(2, "0")}-${String(p3).padStart(2, "0")}`;
                 }
 
-                // If first part > 12, it must be DD/MM/YYYY
                 if (p1 > 12) {
                     return `${p3}-${String(p2).padStart(2, "0")}-${String(p1).padStart(2, "0")}`;
                 }
 
-                // Otherwise treat as M/D/YYYY (US format - common in Google Sheets)
                 return `${p3}-${String(p1).padStart(2, "0")}-${String(p2).padStart(2, "0")}`;
             }
 
-            return trimmed; // Return as-is if unrecognized
+            return trimmed;
         };
 
-        const mapPatient = (row: any, isElective: boolean = false): Patient => {
-            // Helper to get value by original column index (if available) or fuzzy key
-            const getVal = (keyPart: string, index?: number) => {
-                if (!isElective && index !== undefined) {
-                    // For 'Scraped' sheet, we can use the raw key if we know its position
-                    // getSheetData returns objects with keys = headers
-                    const keys = Object.keys(row);
-                    if (keys[index]) return row[keys[index]];
+        const mapPatient = (row: SheetRow, isElective: boolean = false): Patient => {
+            const getVal = (...keyParts: string[]) => {
+                for (const keyPart of keyParts) {
+                    const value = getValue(row, keyPart);
+                    if (value) return value;
                 }
-                return getValue(row, keyPart);
+                return "";
             };
 
-            const rawDate = getVal("ip-date", 0) || getVal("date of surgery") || getVal("surgery date") || getVal("date");
+            const age = getVal("age");
+            const gender = getVal("gender", "sex");
+            const districtName = getVal("district name");
+            const districtId = getVal("district id");
+            const rawDate =
+                getVal("ip-date ad", "ip date ad", "ip-date", "date of surgery", "surgery date", "date")
+                || getVal("ip-date bs", "ip date bs");
 
             return {
-                id: getVal("hospital no", 1) || Math.random().toString(),
+                id: getVal("uhid", "hospital no", "mrn") || Math.random().toString(),
                 ipDate: normalizeDate(rawDate),
-                hospitalNo: getVal("hospital no", 1) || getVal("mrn"),
-                inPatNo: getVal("inpat no", 2) || getVal("inpatient"),
-                name: getVal("patient name", 3) || getVal("name") || getVal("patient"),
-                department: getVal("department", 4) || getVal("dept"),
-                consultant: getVal("consultant", 5) || getVal("surgeon"),
-                mobile: getVal("contact", 6) || getVal("mobile") || getVal("phone"),
-                ageGender: getVal("age/gender", 7) || (getValue(row, "age") ? `${getValue(row, "age")}${getValue(row, "sex") || getValue(row, "gender") ? `/${getValue(row, "sex") || getValue(row, "gender")}` : ""}` : ""),
-                bedNo: getVal("bed no", 8) || getVal("bed"),
-                address: getVal("address", 10), // Specifically index 10 for recently added column
+                hospitalNo: getVal("uhid", "hospital no", "mrn"),
+                inPatNo: getVal("inpatient no", "inpat no", "inpatient"),
+                name: getVal("patient name", "name", "patient", "name of patient"),
+                department: getVal("department", "dept"),
+                consultant: getVal("consultant", "consultant in charge", "surgeon"),
+                mobile: getVal("phone number", "contact number", "contact", "mobile", "phone"),
+                ageGender: normalizeAgeGender(getVal("age/gender") || (age ? `${age}${gender ? `/${normalizeGenderLabel(gender)}` : ""}` : "")),
+                bedNo: getVal("bed no", "bed"),
+                address: districtName || districtId || getVal("address"),
                 diagnosis: getValue(row, "diagnosis"),
                 procedure: getValue(row, "procedure") || getValue(row, "surgery"),
                 npoStatus: getValue(row, "npo status") || getValue(row, "npo") || getValue(row, "remark") || getValue(row, "instruction"),
-                status: isElective ? "elective" : "admitted" as any
+                status: (isElective ? "elective" : "admitted") as Patient["status"]
             };
         };
 
         const patients: Patient[] = [
             ...admittedData.map(row => mapPatient(row, false)),
             ...preopData.map(row => mapPatient(row, true))
-        ].filter(p => p.hospitalNo || p.name); // Filter out empty rows
+        ].filter(p => p.hospitalNo || p.name);
 
-        console.log(`API Found: ${admittedData.length} admitted rows, ${preopData.length} preop rows. Filtered to ${patients.length} patients.`);
+        console.log(`API Found: ${admittedData.length} admitted rows from ${admittedSource.range || "no admitted sheet"}, ${preopData.length} preop rows from ${electiveSource.range || "no elective sheet"}. Filtered to ${patients.length} patients.`);
 
         return NextResponse.json(patients);
     } catch (error) {
