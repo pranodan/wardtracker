@@ -3,7 +3,7 @@
 import { Patient } from "@/types";
 import { X, Save, Activity, ClipboardList, BookOpen, AlertTriangle, FileOutput, Plus, Trash2, Calendar as CalendarIcon, ChevronUp, ChevronDown, Loader2, FileText, ArrowRightLeft, Copy, Check } from "lucide-react";
 import { format, differenceInDays, isValid, compareDesc } from "date-fns";
-import { parseAnyDate } from "@/lib/utils";
+import { parseAnyDate, parseTemporarySheetSurgeries } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
 import { useState, useEffect, useRef } from "react";
 import { cn } from "@/lib/utils";
@@ -180,11 +180,15 @@ export default function PatientDetailModal({ patient, onClose, onSave, onDischar
     const populateFromTemporarySheetPlan = () => {
         if (!hasTemporarySheetPlan) return;
 
+        const parsedSheetSurgeries = parseTemporarySheetSurgeries(tempPlanSx, tempSxDate);
+        const [primarySheetSurgery, ...additionalSheetSurgeries] = parsedSheetSurgeries;
+
         setFormData(prev => ({
             ...prev,
             diagnosis: tempProvDx || prev.diagnosis || "",
-            procedure: tempPlanSx || prev.procedure || "",
-            dop: tempSxDate || prev.dop || ""
+            procedure: primarySheetSurgery?.procedure || tempPlanSx || prev.procedure || "",
+            dop: primarySheetSurgery?.dop || tempSxDate || prev.dop || "",
+            surgeries: additionalSheetSurgeries.length > 0 ? additionalSheetSurgeries : prev.surgeries || []
         }));
         setIsDirty(true);
         setShowPopulateSheetPlanConfirm(false);

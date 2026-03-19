@@ -1,6 +1,7 @@
 import { type ClassValue, clsx } from "clsx";
 import { twMerge } from "tailwind-merge";
 import { Patient } from "@/types";
+import { subDays, startOfDay } from "date-fns";
 
 export function cn(...inputs: ClassValue[]) {
     return twMerge(clsx(inputs));
@@ -113,6 +114,58 @@ export function resolveProcedure(patient: Partial<Patient>): string {
 
 export function resolveProcedureDate(patient: Partial<Patient>): string {
     return sanitizeSheetValue(patient.dop) || sanitizeSheetValue(patient.tempSxDate);
+}
+
+function formatDateForInput(date: Date): string {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const day = String(date.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+}
+
+function cleanMergedProcedureChunk(value: string): string {
+    return sanitizeSheetValue(value)
+        .replace(/^\+\s*/, "")
+        .replace(/\s*\+$/, "")
+        .replace(/\s{2,}/g, " ")
+        .trim();
+}
+
+export function parseTemporarySheetSurgeries(planSx?: string | null, sxDate?: string | null, today: Date = new Date()) {
+    const mergedPlan = sanitizeSheetValue(planSx);
+    const baseDate = sanitizeSheetValue(sxDate);
+
+    if (!mergedPlan) return [];
+
+    const podMatches = Array.from(mergedPlan.matchAll(/(\d+)\s*POD\b/gi));
+    if (podMatches.length === 0) {
+        return [{ procedure: cleanMergedProcedureChunk(mergedPlan), dop: baseDate }].filter(entry => entry.procedure);
+    }
+
+    const parsed = [];
+    const firstPodIndex = podMatches[0].index ?? 0;
+    const latestChunk = cleanMergedProcedureChunk(mergedPlan.slice(0, firstPodIndex));
+
+    if (latestChunk) {
+        parsed.push({ procedure: latestChunk, dop: baseDate });
+    }
+
+    podMatches.forEach((match, index) => {
+        const days = Number.parseInt(match[1], 10);
+        if (Number.isNaN(days)) return;
+
+        const chunkStart = (match.index ?? 0) + match[0].length;
+        const chunkEnd = index < podMatches.length - 1 ? (podMatches[index + 1].index ?? mergedPlan.length) : mergedPlan.length;
+        const procedure = cleanMergedProcedureChunk(mergedPlan.slice(chunkStart, chunkEnd));
+        if (!procedure) return;
+
+        parsed.push({
+            procedure,
+            dop: formatDateForInput(subDays(startOfDay(today), days))
+        });
+    });
+
+    return parsed;
 }
 
 export function getCombinedProcedureText(patient: Partial<Patient>): string {

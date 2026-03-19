@@ -1,6 +1,6 @@
 import { Patient, TrackingEntry } from "@/types";
 import { motion, AnimatePresence } from "framer-motion";
-import { differenceInDays, isValid, compareDesc } from "date-fns";
+import { differenceInCalendarDays, isValid, compareDesc, startOfDay } from "date-fns";
 import { cn, parseAnyDate, resolveDiagnosis, resolveProcedure, resolveProcedureDate } from "@/lib/utils";
 import { useState, useRef, useEffect } from "react";
 import { Activity, X, Maximize2, Minimize2, ChevronLeft, ChevronRight } from "lucide-react";
@@ -28,14 +28,13 @@ export default function PatientCard({ patient, onClick, showConsultantInitials }
     const hasDiagnosis = !!displayDiagnosis;
     const procedures: { text: string; date: Date; isTemporary?: boolean }[] = [];
 
-    // Helper to calculate POD
+    // Helper to calculate POD using calendar dates only (Today - SxDate)
     const getPOD = (dateString?: string) => {
         if (!dateString) return "";
         try {
             const date = parseAnyDate(dateString);
             if (!date || !isValid(date)) return "";
-            const today = new Date();
-            const diff = differenceInDays(today, date);
+            const diff = differenceInCalendarDays(startOfDay(new Date()), startOfDay(date));
             return diff >= 0 ? `${diff}POD` : "";
         } catch (e) {
             return "";
@@ -144,7 +143,7 @@ export default function PatientCard({ patient, onClick, showConsultantInitials }
                                         try {
                                             const date = parseAnyDate(patient.ipDate);
                                             if (date && isValid(date)) {
-                                                const diff = differenceInDays(new Date(), date);
+                                                const diff = differenceInCalendarDays(startOfDay(new Date()), startOfDay(date));
                                                 if (diff >= 0) return `, ${diff}DOA`;
                                             }
                                         } catch (e) { return ""; }
