@@ -1,7 +1,7 @@
 import { Patient, TrackingEntry } from "@/types";
 import { motion, AnimatePresence } from "framer-motion";
 import { differenceInDays, isValid, compareDesc } from "date-fns";
-import { cn, parseAnyDate } from "@/lib/utils";
+import { cn, parseAnyDate, resolveDiagnosis, resolveProcedure, resolveProcedureDate } from "@/lib/utils";
 import { useState, useRef, useEffect } from "react";
 import { Activity, X, Maximize2, Minimize2, ChevronLeft, ChevronRight } from "lucide-react";
 
@@ -14,8 +14,19 @@ interface PatientCardProps {
 import { getBedGroup } from "@/utils/bedGrouping";
 
 export default function PatientCard({ patient, onClick, showConsultantInitials }: PatientCardProps) {
-    const hasDiagnosis = !!patient.diagnosis;
-    const procedures: { text: string; date: Date }[] = [];
+    const manualDiagnosis = patient.diagnosis?.trim() || "";
+    const temporaryDiagnosis = patient.tempProvDx?.trim() || "";
+    const displayDiagnosis = resolveDiagnosis(patient);
+    const usesTemporaryDiagnosis = !manualDiagnosis && !!temporaryDiagnosis && displayDiagnosis === temporaryDiagnosis;
+
+    const manualProcedureName = patient.procedure?.trim() || "";
+    const temporaryProcedureName = patient.tempPlanSx?.trim() || "";
+    const primaryProcedureName = resolveProcedure(patient);
+    const primaryProcedureDate = resolveProcedureDate(patient);
+    const usesTemporaryPrimaryProcedure = !manualProcedureName && !!temporaryProcedureName && primaryProcedureName === temporaryProcedureName;
+
+    const hasDiagnosis = !!displayDiagnosis;
+    const procedures: { text: string; date: Date; isTemporary?: boolean }[] = [];
 
     // Helper to calculate POD
     const getPOD = (dateString?: string) => {
@@ -31,12 +42,13 @@ export default function PatientCard({ patient, onClick, showConsultantInitials }
         }
     };
 
-    if (patient.procedure) {
-        const pod = getPOD(patient.dop);
-        const date = parseAnyDate(patient.dop);
+    if (primaryProcedureName) {
+        const pod = getPOD(primaryProcedureDate);
+        const date = parseAnyDate(primaryProcedureDate);
         procedures.push({
-            text: pod ? `${pod} ${patient.procedure}` : patient.procedure,
-            date: date || new Date(0)
+            text: `${usesTemporaryPrimaryProcedure ? "?? " : ""}${pod ? `${pod} ${primaryProcedureName}` : primaryProcedureName}`,
+            date: date || new Date(0),
+            isTemporary: usesTemporaryPrimaryProcedure
         });
     }
     if (patient.surgeries) {
@@ -53,11 +65,8 @@ export default function PatientCard({ patient, onClick, showConsultantInitials }
     // Sort by date descending (latest first)
     procedures.sort((a, b) => compareDesc(a.date, b.date));
 
-    // Extract text only
-    const procedureTexts = procedures.map(p => p.text);
-
-    // Surgery Display Logic: If > 2 procedures, join with comma. Otherwise, stack them?
-    const useCommaSeparation = procedureTexts.length > 2;
+    // Surgery Display Logic: If > 2 procedures, join with comma. Otherwise, stack them.
+    const useCommaSeparation = procedures.length > 2;
 
     return (
         <motion.div
@@ -96,21 +105,32 @@ export default function PatientCard({ patient, onClick, showConsultantInitials }
                     </div>
                 )}
                 <div className="mb-1">
-                    <p className={`line-clamp-2 text-xs font-medium ${hasDiagnosis ? 'text-gray-300' : 'text-red-400 italic'}`}>
-                        {patient.diagnosis || "No Diagnosis Recorded"}
+                    <p className={cn(
+                        "line-clamp-2 text-xs font-medium",
+                        usesTemporaryDiagnosis
+                            ? "text-[#c084fc]"
+                            : hasDiagnosis
+                                ? "text-gray-300"
+                                : "text-red-400 italic"
+                    )}>
+                        {usesTemporaryDiagnosis ? `?? ${displayDiagnosis}` : displayDiagnosis || "No Diagnosis Recorded"}
                     </p>
                 </div>
                 <div className="mt-2">
-                    {procedureTexts.length > 0 ? (
+                    {procedures.length > 0 ? (
                         useCommaSeparation ? (
-                            <div className="text-[10px] font-medium text-primary uppercase leading-tight">
-                                {procedureTexts.join(", ")}
+                            <div className="flex flex-wrap gap-x-1 gap-y-1 text-[10px] font-medium uppercase leading-tight">
+                                {procedures.map((proc, idx) => (
+                                    <span key={idx} className={proc.isTemporary ? "text-[#ff5ca8]" : "text-primary"}>
+                                        {proc.text}{idx < procedures.length - 1 ? "," : ""}
+                                    </span>
+                                ))}
                             </div>
                         ) : (
                             <div className="flex flex-col space-y-1">
-                                {procedureTexts.map((proc, idx) => (
-                                    <span key={idx} className="text-[10px] font-medium text-primary uppercase">
-                                        {proc}
+                                {procedures.map((proc, idx) => (
+                                    <span key={idx} className={cn("text-[10px] font-medium uppercase", proc.isTemporary ? "text-[#ff5ca8]" : "text-primary")}>
+                                        {proc.text}
                                     </span>
                                 ))}
                             </div>

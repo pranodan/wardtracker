@@ -49,15 +49,22 @@ export function usePatients() {
     }, []);
 
     const sheetConsultants = useMemo(() => {
-        const unique = Array.from(
-            new Set(
-                sheetData
-                    .map(patient => sanitizeSheetValue(patient.consultant))
-                    .filter(Boolean)
-            )
-        );
+        const orthopaedicConsultants = new Map<string, string>();
 
-        return unique.sort((a, b) => a.localeCompare(b));
+        sheetData.forEach(patient => {
+            const department = sanitizeSheetValue(patient.department).toLowerCase();
+            if (!department.includes("orthop")) return;
+
+            const consultant = sanitizeSheetValue(patient.consultant);
+            if (!consultant) return;
+
+            const normalizedConsultant = consultant.toLowerCase();
+            if (!orthopaedicConsultants.has(normalizedConsultant)) {
+                orthopaedicConsultants.set(normalizedConsultant, consultant);
+            }
+        });
+
+        return Array.from(orthopaedicConsultants.values()).sort((a, b) => a.localeCompare(b));
     }, [sheetData]);
 
     // 2. Listen to Transfers (Real-time)
@@ -97,7 +104,13 @@ export function usePatients() {
             if (!patient.hospitalNo || !patient.bedNo) return false;
 
             const saved = patientEdits[patient.hospitalNo];
-            return !saved?.hasBeenInMainList || saved?.lastKnownBedNo !== patient.bedNo;
+            return (
+                !saved?.hasBeenInMainList ||
+                saved?.lastKnownBedNo !== patient.bedNo ||
+                sanitizeSheetValue(String(saved?.tempProvDx || "")) !== sanitizeSheetValue(patient.tempProvDx) ||
+                sanitizeSheetValue(String(saved?.tempPlanSx || "")) !== sanitizeSheetValue(patient.tempPlanSx) ||
+                sanitizeSheetValue(String(saved?.tempSxDate || "")) !== sanitizeSheetValue(patient.tempSxDate)
+            );
         });
 
         if (trackedPatients.length === 0) return;
@@ -123,7 +136,10 @@ export function usePatients() {
                             department: patient.department,
                             ipDate: patient.ipDate,
                             address: patient.address || "",
-                            bedNo: patient.bedNo
+                            bedNo: patient.bedNo,
+                            tempProvDx: patient.tempProvDx || "",
+                            tempPlanSx: patient.tempPlanSx || "",
+                            tempSxDate: patient.tempSxDate || ""
                         },
                         { merge: true }
                     )
@@ -178,6 +194,9 @@ export function usePatients() {
                         address: edit.address || "",
                         diagnosis: edit.diagnosis || "",
                         procedure: edit.procedure || "",
+                        tempProvDx: edit.tempProvDx || "",
+                        tempPlanSx: edit.tempPlanSx || "",
+                        tempSxDate: edit.tempSxDate || "",
                         plan: edit.plan || "",
                         history: edit.history || "",
                         examination: edit.examination || "",

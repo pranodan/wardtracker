@@ -103,6 +103,18 @@ export function extractGenderFromAgeGender(ageGender?: string | null): string {
     return "";
 }
 
+export function resolveDiagnosis(patient: Partial<Patient>): string {
+    return sanitizeSheetValue(patient.diagnosis) || sanitizeSheetValue(patient.finalDiagnosis) || sanitizeSheetValue(patient.tempProvDx);
+}
+
+export function resolveProcedure(patient: Partial<Patient>): string {
+    return sanitizeSheetValue(patient.procedure) || sanitizeSheetValue(patient.procedureName) || sanitizeSheetValue(patient.tempPlanSx);
+}
+
+export function resolveProcedureDate(patient: Partial<Patient>): string {
+    return sanitizeSheetValue(patient.dop) || sanitizeSheetValue(patient.tempSxDate);
+}
+
 export function getCombinedProcedureText(patient: Partial<Patient>): string {
     const procedures: string[] = [];
 
@@ -137,33 +149,42 @@ export function buildDischargeRecord(
         patient.dischargeDate ||
         nowIso.split("T")[0];
     const ageGender = normalizeAgeGender(patient.ageGender);
-    const procedureText = getCombinedProcedureText(patient);
+    const resolvedDiagnosis = resolveDiagnosis(patient);
+    const resolvedProcedure = resolveProcedure(patient);
+    const resolvedProcedureDate = resolveProcedureDate(patient);
+    const normalizedPatient = {
+        ...patient,
+        diagnosis: patient.diagnosis || resolvedDiagnosis,
+        procedure: patient.procedure || resolvedProcedure,
+        dop: patient.dop || resolvedProcedureDate
+    };
+    const procedureText = getCombinedProcedureText(normalizedPatient);
 
     return {
-        ...patient,
-        hospitalNo: patient.hospitalNo || "",
-        inPatNo: patient.inPatNo || "",
-        inPatientId: overrides.inPatientId || patient.inPatNo || patient.hospitalNo || "",
-        patientName: overrides.patientName || patient.name || "",
-        name: patient.name || overrides.patientName || "",
+        ...normalizedPatient,
+        hospitalNo: normalizedPatient.hospitalNo || "",
+        inPatNo: normalizedPatient.inPatNo || "",
+        inPatientId: overrides.inPatientId || normalizedPatient.inPatNo || normalizedPatient.hospitalNo || "",
+        patientName: overrides.patientName || normalizedPatient.name || "",
+        name: normalizedPatient.name || overrides.patientName || "",
         ageGender,
         age: overrides.age || extractAgeFromAgeGender(ageGender),
         gender: overrides.gender || extractGenderFromAgeGender(ageGender),
-        consultant: patient.consultant || "",
-        mobile: patient.mobile || "",
-        address: patient.address || "",
-        bedNo: patient.bedNo || "",
-        ipDate: patient.ipDate || "",
-        history: patient.history || "",
-        examination: patient.examination || "",
-        investigation: patient.investigation || "",
-        diagnosis: patient.diagnosis || "",
-        provisionalDiagnosis: overrides.provisionalDiagnosis || patient.diagnosis || "",
-        finalDiagnosis: overrides.finalDiagnosis || patient.diagnosis || "",
-        procedureName: patient.procedureName || patient.procedure || "",
-        procedureDescription: patient.procedureDescription || procedureText || patient.plan || "",
-        management: overrides.management || patient.plan || procedureText || "",
-        followUp: overrides.followUp || patient.followUp || "",
+        consultant: normalizedPatient.consultant || "",
+        mobile: normalizedPatient.mobile || "",
+        address: normalizedPatient.address || "",
+        bedNo: normalizedPatient.bedNo || "",
+        ipDate: normalizedPatient.ipDate || "",
+        history: normalizedPatient.history || "",
+        examination: normalizedPatient.examination || "",
+        investigation: normalizedPatient.investigation || "",
+        diagnosis: resolvedDiagnosis || "",
+        provisionalDiagnosis: overrides.provisionalDiagnosis || normalizedPatient.provisionalDiagnosis || resolvedDiagnosis || "",
+        finalDiagnosis: overrides.finalDiagnosis || normalizedPatient.finalDiagnosis || resolvedDiagnosis || "",
+        procedureName: normalizedPatient.procedureName || resolvedProcedure || "",
+        procedureDescription: normalizedPatient.procedureDescription || procedureText || normalizedPatient.plan || "",
+        management: overrides.management || normalizedPatient.plan || procedureText || "",
+        followUp: overrides.followUp || normalizedPatient.followUp || "",
         dischargeDate,
         date: dischargeDate,
         timestamp: overrides.timestamp || nowIso,

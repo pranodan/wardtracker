@@ -10,6 +10,9 @@ export interface Patient {
     ageGender: string;
     bedNo: string;
     address?: string;
+    tempProvDx?: string;
+    tempPlanSx?: string;
+    tempSxDate?: string;
 
     // Extended data (from Firebase or local state)
     diagnosis?: string;

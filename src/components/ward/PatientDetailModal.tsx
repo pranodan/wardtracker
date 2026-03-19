@@ -74,6 +74,20 @@ function loadSuggestions(storageKey: string, defaults: string[]) {
     }
 }
 
+function cleanTempField(value?: string) {
+    return String(value || "").trim();
+}
+
+function buildTemporaryPlanText(planSx?: string, provDx?: string, sxDate?: string) {
+    const cleanPlan = cleanTempField(planSx);
+    const cleanDx = cleanTempField(provDx);
+    const cleanDate = cleanTempField(sxDate);
+
+    if (!cleanPlan && !cleanDx && !cleanDate) return "";
+
+    return `Plan: ${cleanPlan || "Pending"}${cleanDx ? ` for ${cleanDx}` : ""}${cleanDate ? ` on ${cleanDate}` : ""}`;
+}
+
 export default function PatientDetailModal({ patient, onClose, onSave, onDischarge, readOnly, onTransfer, consultants, onRemove, onSaveAndNext, onSkip }: PatientDetailModalProps) {
     const [activeTab, setActiveTab] = useState<"clinical" | "clinical_data" | "tracking">("clinical");
     const [formData, setFormData] = useState<Partial<Patient>>(patient || {});
@@ -85,6 +99,7 @@ export default function PatientDetailModal({ patient, onClose, onSave, onDischar
     const [isTransferring, setIsTransferring] = useState(false);
     const [hasCopied, setHasCopied] = useState(false);
     const [showArchivedToast, setShowArchivedToast] = useState(false);
+    const [showPopulateSheetPlanConfirm, setShowPopulateSheetPlanConfirm] = useState(false);
     const [procedureSuggestions, setProcedureSuggestions] = useState<string[]>(() => loadSuggestions(PROCEDURE_STORAGE_KEY, PROCEDURE_SUGGESTIONS));
     const [diagnosisSuggestions, setDiagnosisSuggestions] = useState<string[]>(() => loadSuggestions(DIAGNOSIS_STORAGE_KEY, DIAGNOSIS_SUGGESTIONS));
     const archivedPlanRef = useRef<HTMLDivElement>(null);
@@ -155,6 +170,25 @@ export default function PatientDetailModal({ patient, onClose, onSave, onDischar
             setFormData(finalData);
         }
     }, [patient]);
+
+    const tempProvDx = cleanTempField(formData.tempProvDx);
+    const tempPlanSx = cleanTempField(formData.tempPlanSx);
+    const tempSxDate = cleanTempField(formData.tempSxDate);
+    const hasTemporarySheetPlan = Boolean(tempProvDx || tempPlanSx || tempSxDate);
+    const temporaryPlanText = buildTemporaryPlanText(tempPlanSx, tempProvDx, tempSxDate);
+
+    const populateFromTemporarySheetPlan = () => {
+        if (!hasTemporarySheetPlan) return;
+
+        setFormData(prev => ({
+            ...prev,
+            diagnosis: tempProvDx || prev.diagnosis || "",
+            procedure: tempPlanSx || prev.procedure || "",
+            dop: tempSxDate || prev.dop || ""
+        }));
+        setIsDirty(true);
+        setShowPopulateSheetPlanConfirm(false);
+    };
 
     const updateField = (field: keyof Patient, value: any) => {
         setFormData((prev) => ({ ...prev, [field]: value }));
@@ -511,6 +545,29 @@ export default function PatientDetailModal({ patient, onClose, onSave, onDischar
                     <div className="flex-1 overflow-y-auto p-6 pt-2">
                         {activeTab === "clinical" ? (
                             <div className="space-y-6">
+                                {hasTemporarySheetPlan && (
+                                    <div className="rounded-xl border border-primary/20 bg-primary/5 p-4">
+                                        <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                                            <div className="space-y-1">
+                                                <div className="text-[10px] font-semibold uppercase tracking-[0.2em] text-primary">Temporary Sheet Plan</div>
+                                                <p className="text-sm font-medium text-white">{temporaryPlanText}</p>
+                                                <p className="text-xs text-gray-400">
+                                                    This stays as a fallback for the patient card until you save definitive diagnosis, procedure, and procedure date.
+                                                </p>
+                                            </div>
+                                            {!readOnly && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setShowPopulateSheetPlanConfirm(true)}
+                                                    className="inline-flex items-center justify-center rounded-lg border border-primary/30 bg-primary/10 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-primary hover:bg-primary/20"
+                                                >
+                                                    Populate Fields
+                                                </button>
+                                            )}
+                                        </div>
+                                    </div>
+                                )}
+
                                 <div className="space-y-2">
                                     <InputGroup label="Diagnosis" value={formData.diagnosis} onChange={(v: string) => updateField("diagnosis", v)} disabled={readOnly} />
                                     {!readOnly && (
@@ -886,6 +943,46 @@ export default function PatientDetailModal({ patient, onClose, onSave, onDischar
                         </div>
                     </div>
                 </motion.div>
+
+                <AnimatePresence>
+                    {showPopulateSheetPlanConfirm && (
+                        <div className="absolute inset-0 z-[70] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+                            <motion.div
+                                initial={{ opacity: 0, scale: 0.95 }}
+                                animate={{ opacity: 1, scale: 1 }}
+                                exit={{ opacity: 0, scale: 0.95 }}
+                                className="w-full max-w-md rounded-2xl border border-white/10 bg-[#0f0f0f] p-5 shadow-2xl"
+                            >
+                                <div className="mb-3">
+                                    <div className="text-[10px] font-semibold uppercase tracking-[0.2em] text-primary">Populate Temporary Values</div>
+                                    <h3 className="mt-2 text-lg font-bold text-white">Use the Superscraped plan values?</h3>
+                                </div>
+                                <p className="text-sm leading-relaxed text-gray-300">
+                                    This will copy the temporary sheet values into Diagnosis, Primary Procedure, and Procedure Date in the overview form.
+                                </p>
+                                <div className="mt-4 rounded-xl border border-white/10 bg-white/5 p-3 text-sm text-white">
+                                    {temporaryPlanText}
+                                </div>
+                                <div className="mt-5 flex justify-end gap-3">
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowPopulateSheetPlanConfirm(false)}
+                                        className="rounded-lg border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium text-white hover:bg-white/10"
+                                    >
+                                        Cancel
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={populateFromTemporarySheetPlan}
+                                        className="rounded-lg bg-primary px-4 py-2 text-sm font-bold text-black shadow-lg shadow-primary/20 hover:bg-primary/90"
+                                    >
+                                        Populate
+                                    </button>
+                                </div>
+                            </motion.div>
+                        </div>
+                    )}
+                </AnimatePresence>
 
                 {/* AI Result Modal */}
                 <AnimatePresence>
